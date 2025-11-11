@@ -56,6 +56,7 @@ export function PricePerformanceChart({ filters }: PricePerformanceChartProps) {
           style={{ fontSize: '11px' }}
           axisLine={{ stroke: '#e2e8f0' }}
           tickLine={false}
+          domain={[0, 'auto']}
         />
         <Tooltip
           contentStyle={{

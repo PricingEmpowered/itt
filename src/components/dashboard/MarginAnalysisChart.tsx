@@ -131,6 +131,7 @@ export function MarginAnalysisChart({ filters }: MarginAnalysisChartProps) {
           tickLine={false}
           label={{ value: 'Amount ($M)', angle: -90, position: 'insideLeft', style: { fontSize: '11px' } }}
           tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
+          domain={[0, 'auto']}
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend
