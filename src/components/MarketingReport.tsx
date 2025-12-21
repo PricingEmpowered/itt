@@ -437,20 +437,37 @@ export function MarketingReport() {
       const mainContent = document.querySelector('.space-y-6');
       if (!mainContent) {
         setProgress('Could not find page content to capture');
-        setTimeout(() => setProgress(''), 2000);
+        setTimeout(() => {
+          setProgress('');
+          setCapturing(false);
+        }, 2000);
         return;
       }
 
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const canvas = await html2canvas(mainContent as HTMLElement, {
-        scale: 1.5,
+        scale: 1,
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff',
-        windowWidth: mainContent.scrollWidth,
-        windowHeight: mainContent.scrollHeight
+        windowWidth: 1280,
+        windowHeight: Math.min(mainContent.scrollHeight, 2000),
+        onclone: (clonedDoc) => {
+          const clonedContent = clonedDoc.querySelector('.space-y-6');
+          if (clonedContent) {
+            const canvasElements = clonedContent.querySelectorAll('canvas');
+            canvasElements.forEach((canvas) => {
+              const img = clonedDoc.createElement('img');
+              img.src = (canvas as HTMLCanvasElement).toDataURL();
+              canvas.parentNode?.replaceChild(img, canvas);
+            });
+          }
+        }
       });
 
-      const imageData = canvas.toDataURL('image/png');
+      const imageData = canvas.toDataURL('image/png', 0.8);
 
       setScreenshots(prev => new Map(prev).set(pageName, {
         pageName,
@@ -459,13 +476,18 @@ export function MarketingReport() {
       }));
 
       setProgress(`Screenshot captured for ${pageName}!`);
-      setTimeout(() => setProgress(''), 2000);
+      setTimeout(() => {
+        setProgress('');
+        setCapturing(false);
+      }, 2000);
     } catch (error) {
       console.error('Error capturing screenshot:', error);
-      setProgress('Error capturing screenshot');
-      setTimeout(() => setProgress(''), 2000);
-    } finally {
-      setCapturing(false);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setProgress(`Error: ${errorMessage}. Try a different page or refresh.`);
+      setTimeout(() => {
+        setProgress('');
+        setCapturing(false);
+      }, 3000);
     }
   };
 
