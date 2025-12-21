@@ -129,6 +129,14 @@ export function DashboardEnhanced() {
     return `${sign}${change.toFixed(1)}%`;
   }, []);
 
+  const handleCardClick = useCallback((metric: any) => {
+    setDrillDownModal({ isOpen: true, metric });
+  }, []);
+
+  const closeDrillDown = useCallback(() => {
+    setDrillDownModal({ isOpen: false, metric: null });
+  }, []);
+
   const statsData = useMemo(() => {
     if (!metrics) return [];
 
@@ -201,14 +209,6 @@ export function DashboardEnhanced() {
       </div>
     );
   }
-
-  const handleCardClick = useCallback((metric: any) => {
-    setDrillDownModal({ isOpen: true, metric });
-  }, []);
-
-  const closeDrillDown = useCallback(() => {
-    setDrillDownModal({ isOpen: false, metric: null });
-  }, []);
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
