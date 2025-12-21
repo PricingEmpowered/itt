@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Download, FileText, Loader2 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 interface PageCapture {
@@ -419,16 +418,6 @@ const APP_PAGES: PageCapture[] = [
 export function MarketingReport() {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState('');
-
-  const captureScreenshot = async (element: HTMLElement): Promise<string> => {
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      logging: false,
-      useCORS: true,
-      allowTaint: true,
-    });
-    return canvas.toDataURL('image/png');
-  };
 
   const generateReport = async () => {
     setGenerating(true);
