@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface PageCapture {
   name: string;
@@ -415,9 +416,64 @@ const APP_PAGES: PageCapture[] = [
   }
 ];
 
+interface CapturedScreenshot {
+  pageName: string;
+  imageData: string;
+  timestamp: Date;
+}
+
 export function MarketingReport() {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState('');
+  const [captureMode, setCaptureMode] = useState(false);
+  const [screenshots, setScreenshots] = useState<Map<string, CapturedScreenshot>>(new Map());
+  const [capturing, setCapturing] = useState(false);
+
+  const captureCurrentPage = async (pageName: string) => {
+    setCapturing(true);
+    setProgress(`Capturing ${pageName}...`);
+
+    try {
+      const mainContent = document.querySelector('.space-y-6');
+      if (!mainContent) {
+        setProgress('Could not find page content to capture');
+        setTimeout(() => setProgress(''), 2000);
+        return;
+      }
+
+      const canvas = await html2canvas(mainContent as HTMLElement, {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: mainContent.scrollWidth,
+        windowHeight: mainContent.scrollHeight
+      });
+
+      const imageData = canvas.toDataURL('image/png');
+
+      setScreenshots(prev => new Map(prev).set(pageName, {
+        pageName,
+        imageData,
+        timestamp: new Date()
+      }));
+
+      setProgress(`Screenshot captured for ${pageName}!`);
+      setTimeout(() => setProgress(''), 2000);
+    } catch (error) {
+      console.error('Error capturing screenshot:', error);
+      setProgress('Error capturing screenshot');
+      setTimeout(() => setProgress(''), 2000);
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const clearScreenshots = () => {
+    setScreenshots(new Map());
+    setProgress('All screenshots cleared');
+    setTimeout(() => setProgress(''), 2000);
+  };
 
   const generateReport = async () => {
     setGenerating(true);
@@ -564,9 +620,58 @@ export function MarketingReport() {
           yPos += 6;
         });
 
-        yPos += 5;
+        yPos += 8;
+
+        // Screenshot Section
+        const screenshot = screenshots.get(page.name);
+        if (screenshot) {
+          // Add actual screenshot
+          const imgWidth = contentWidth;
+          const imgHeight = 100;
+
+          try {
+            pdf.addImage(screenshot.imageData, 'PNG', margin, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 5;
+          } catch (error) {
+            console.error('Error adding image:', error);
+            // Fall back to placeholder
+            pdf.setDrawColor(16, 185, 129);
+            pdf.setFillColor(240, 253, 244);
+            pdf.setLineWidth(0.5);
+            pdf.rect(margin, yPos, contentWidth, 80, 'FD');
+            pdf.setFontSize(9);
+            pdf.setTextColor(100, 100, 100);
+            pdf.text('Screenshot could not be added', pageWidth / 2, yPos + 40, { align: 'center' });
+            yPos += 88;
+          }
+        } else {
+          // Screenshot Placeholder Box
+          pdf.setDrawColor(16, 185, 129);
+          pdf.setFillColor(240, 253, 244);
+          pdf.setLineWidth(0.5);
+          pdf.rect(margin, yPos, contentWidth, 80, 'FD');
+
+          pdf.setFontSize(10);
+          pdf.setTextColor(16, 185, 129);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Visual Preview', pageWidth / 2, yPos + 35, { align: 'center' });
+
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'italic');
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(`${page.name} Interface Screenshot`, pageWidth / 2, yPos + 42, { align: 'center' });
+          pdf.text('Navigate to this section and click "Capture Screenshot"', pageWidth / 2, yPos + 50, { align: 'center' });
+          pdf.text('before generating the report to include actual visuals', pageWidth / 2, yPos + 57, { align: 'center' });
+
+          yPos += 88;
+        }
 
         // Key Features
+        if (yPos > pageHeight - 80) {
+          pdf.addPage();
+          yPos = margin;
+        }
+
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(12);
         pdf.setTextColor(16, 185, 129);
@@ -659,7 +764,7 @@ export function MarketingReport() {
       <div>
         <h2 className="text-3xl font-bold text-slate-900">Marketing Report</h2>
         <p className="text-slate-600 mt-1">
-          Generate a comprehensive PDF overview of all platform features and user experience
+          Generate a comprehensive PDF overview of all platform features with screenshots
         </p>
       </div>
 
@@ -685,6 +790,7 @@ export function MarketingReport() {
                 <ul className="space-y-1 text-sm text-emerald-800">
                   <li>• Executive summary with key capabilities</li>
                   <li>• Detailed feature descriptions for all {APP_PAGES.length} modules</li>
+                  <li>• Screenshots and visualizations from each section</li>
                   <li>• User experience highlights and design philosophy</li>
                   <li>• Technical capabilities overview</li>
                   <li>• Professional formatting ready for stakeholder distribution</li>
@@ -692,43 +798,98 @@ export function MarketingReport() {
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-2">Perfect For:</h4>
+                <h4 className="font-semibold text-blue-900 mb-2">How to Include Screenshots:</h4>
                 <ul className="space-y-1 text-sm text-blue-800">
-                  <li>• Marketing collateral and sales presentations</li>
-                  <li>• Executive briefings and stakeholder updates</li>
-                  <li>• Product documentation and training materials</li>
-                  <li>• RFP responses and vendor evaluations</li>
+                  <li>1. Navigate to each section you want to capture (Dashboard, Analytics, etc.)</li>
+                  <li>2. Use the "Capture Screenshot" dropdown below to capture the current page</li>
+                  <li>3. Once you've captured all desired sections, generate the report</li>
+                  <li>4. Screenshots will be automatically included in the PDF</li>
                 </ul>
               </div>
             </div>
 
-            <button
-              onClick={generateReport}
-              disabled={generating}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="animate-spin" size={20} />
-                  <span>Generating Report...</span>
-                </>
-              ) : (
-                <>
-                  <Download size={20} />
-                  <span>Generate Marketing Report</span>
-                </>
+            <div className="flex gap-3 mb-4">
+              <button
+                onClick={generateReport}
+                disabled={generating}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} />
+                    <span>Generating Report...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={20} />
+                    <span>Generate Report ({screenshots.size} screenshot{screenshots.size !== 1 ? 's' : ''})</span>
+                  </>
+                )}
+              </button>
+
+              {screenshots.size > 0 && (
+                <button
+                  onClick={clearScreenshots}
+                  disabled={generating || capturing}
+                  className="px-4 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Clear Screenshots
+                </button>
               )}
-            </button>
+            </div>
 
             {progress && (
               <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
                 <p className="text-sm text-slate-700 flex items-center gap-2">
-                  {generating && <Loader2 className="animate-spin" size={16} />}
+                  {(generating || capturing) && <Loader2 className="animate-spin" size={16} />}
                   {progress}
                 </p>
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h3 className="text-lg font-bold text-slate-900 mb-4">Capture Screenshots</h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Navigate to any section of the application, then select it from the dropdown below to capture a screenshot for the marketing report.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {APP_PAGES.map((page, index) => {
+            const isCaptured = screenshots.has(page.name);
+            return (
+              <button
+                key={index}
+                onClick={() => captureCurrentPage(page.name)}
+                disabled={capturing || generating}
+                className={`p-4 rounded-lg border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isCaptured
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : 'border-slate-200 bg-white hover:border-emerald-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-emerald-500 text-white rounded text-xs flex items-center justify-center font-bold">
+                      {index + 1}
+                    </div>
+                    <h4 className="font-semibold text-slate-900 text-sm">{page.name}</h4>
+                  </div>
+                  {isCaptured && (
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {isCaptured ? 'Screenshot captured!' : 'Click to capture current view'}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
