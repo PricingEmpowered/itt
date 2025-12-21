@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, LayoutDashboard, Package, Headphones, FileText, ClipboardList, CheckSquare, UsersIcon, DollarSign, Layers, TrendingUp, Workflow, BarChart3, Brain, BookOpen, Bell, Percent, Award, UserCircle, Settings as SettingsIcon, Target } from 'lucide-react';
+import { ChevronDown, ChevronRight, LayoutDashboard, Package, Headphones, FileText, ClipboardList, CheckSquare, UsersIcon, DollarSign, Layers, TrendingUp, Workflow, BarChart3, Brain, BookOpen, Bell, Percent, Award, UserCircle, Settings as SettingsIcon, Target, Download } from 'lucide-react';
 
-type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'rules-pricing';
+type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'rules-pricing' | 'marketing-report';
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -228,6 +228,12 @@ export function NavigationMenu({ currentView, onViewChange }: Props) {
             label="Commissions"
             active={currentView === 'commissions'}
             onClick={() => onViewChange('commissions')}
+          />
+          <NavItem
+            icon={<Download size={20} />}
+            label="Marketing Report"
+            active={currentView === 'marketing-report'}
+            onClick={() => onViewChange('marketing-report')}
           />
         </div>
       </div>

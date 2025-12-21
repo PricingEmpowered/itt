@@ -26,8 +26,9 @@ const PricingExcellence = lazy(() => import('./components/PricingExcellence').th
 const AIAnalytics = lazy(() => import('./components/AIAnalytics').then(m => ({ default: m.AIAnalytics })));
 const AIQuestionLibrary = lazy(() => import('./components/AIQuestionLibrary').then(m => ({ default: m.AIQuestionLibrary })));
 const RulesPricingEngine = lazy(() => import('./components/RulesPricingEngine').then(m => ({ default: m.RulesPricingEngine })));
+const MarketingReport = lazy(() => import('./components/MarketingReport').then(m => ({ default: m.MarketingReport })));
 
-type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'rules-pricing';
+type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'rules-pricing' | 'marketing-report';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -128,6 +129,7 @@ function App() {
               {currentView === 'excellence' && <PricingExcellence />}
               {currentView === 'users' && <Users />}
               {currentView === 'settings' && <Settings />}
+              {currentView === 'marketing-report' && <MarketingReport />}
             </Suspense>
           </div>
         </main>
