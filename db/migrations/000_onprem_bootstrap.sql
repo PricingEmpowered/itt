@@ -36,8 +36,8 @@ $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 
 /*
-  Local user store. Replaces Supabase Auth: `encrypted_password` holds an
-  argon2id hash written by the API, never a plaintext or reversible value.
+  Local user store. Replaces Supabase Auth: `encrypted_password` holds a
+  scrypt hash written by the API, never a plaintext or reversible value.
   Column names mirror Supabase's so the existing foreign keys and the one
   `SELECT email FROM auth.users` policy keep working verbatim.
 */

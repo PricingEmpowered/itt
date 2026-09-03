@@ -13,7 +13,7 @@
   directory entirely and starts with an empty quote history.
 
   The demo user is deliberately unusable for login: `encrypted_password` holds
-  a literal that is not a valid argon2 hash, so no password can verify against
+  a literal that is not a valid scrypt hash, so no password can verify against
   it, and `is_active` is false. Real accounts are created through the API.
 */
 

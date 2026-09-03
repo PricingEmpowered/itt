@@ -61,8 +61,9 @@ PostgreSQL has no `CREATE POLICY IF NOT EXISTS`, so the runner injects a
 `DROP POLICY IF EXISTS` before each one. This is safe because the statement
 that follows fully redefines the policy.
 
-**Passwords.** `auth.users.encrypted_password` holds an argon2id hash written
-by the API. The demo seed account cannot authenticate: its stored value is not
+**Passwords.** `auth.users.encrypted_password` holds a scrypt hash written by
+the API (Node's built-in scrypt, so there is no native addon to compile on the
+client's server). The demo seed account cannot authenticate: its stored value is not
 a valid hash and `is_active` is false.
 
 ## Security notes
@@ -78,6 +79,14 @@ not enough -- PostgreSQL grants function EXECUTE to PUBLIC by default.
 
 The four analytics call sites that used it (in `QuantityBreaksAnalytics.tsx`
 and `QuantityBreaksDetailModal.tsx`) need typed API endpoints.
+
+**Quote-line visibility was restored.** Migration `20251106014716` dropped the
+policy that let users read lines of Approved/Rejected quotes, leaving them able
+to see every quote header but only their own quotes' line items. That broke
+price guidance, which exists to show pricing across the organisation.
+`20260903120000_restore_price_guidance_quote_lines_policy.sql` re-creates it.
+Verified both directions: finalised quotes' lines are readable by any signed-in
+user, and a Draft quote belonging to someone else still returns no lines.
 
 **Connect as a non-owner role.** Table owners and superusers bypass RLS. Run
 migrations as the owning role, but have the application connect as a separate
