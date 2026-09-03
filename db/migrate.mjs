@@ -6,7 +6,8 @@
  *   1. db/migrations/       - the on-prem bootstrap (roles, auth schema, shims)
  *   2. supabase/migrations/ - the 47 application schema migrations, minus the
  *                             demo-data seeds listed in DEMO_SEEDS
- *   3. db/seed/ + DEMO_SEEDS - demo data, only with --with-demo-data
+ *   3. db/post/             - privileges, which need the schema to exist first
+ *   4. db/seed/ + DEMO_SEEDS - demo data, only with --with-demo-data
  *
  * Every file runs inside a transaction and is recorded in schema_migrations,
  * so the runner is safe to re-run and resumes where it left off.
@@ -66,7 +67,8 @@ function sqlFiles(dir) {
 function plan({ withDemoData }) {
   const bootstrap = sqlFiles('db/migrations');
   const app = sqlFiles('supabase/migrations').filter((m) => !DEMO_SEEDS.includes(m.file));
-  const steps = [...bootstrap, ...app];
+  const post = sqlFiles('db/post');
+  const steps = [...bootstrap, ...app, ...post];
 
   if (withDemoData) {
     steps.push(...sqlFiles('db/seed'));

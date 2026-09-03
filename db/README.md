@@ -65,6 +65,29 @@ that follows fully redefines the policy.
 by the API. The demo seed account cannot authenticate: its stored value is not
 a valid hash and `is_active` is false.
 
+## Security notes
+
+**`execute_analytics_query` was removed.** It took arbitrary SQL as text and
+ran it unvalidated under `SECURITY DEFINER`, so it executed as the table owner
+and bypassed row-level security entirely, despite its own comment claiming the
+opposite. The Supabase-era frontend called it straight from the browser with
+interpolated strings. Confirmed against this schema: as `authenticated`,
+`execute_analytics_query('SELECT count(*) FROM auth.users')` returned a count
+from the password-hash table. `db/post/900_grants.sql` drops it. Revoking was
+not enough -- PostgreSQL grants function EXECUTE to PUBLIC by default.
+
+The four analytics call sites that used it (in `QuantityBreaksAnalytics.tsx`
+and `QuantityBreaksDetailModal.tsx`) need typed API endpoints.
+
+**Connect as a non-owner role.** Table owners and superusers bypass RLS. Run
+migrations as the owning role, but have the application connect as a separate
+least-privilege role that has been granted `authenticated`:
+
+```sql
+CREATE ROLE pricespace_app LOGIN PASSWORD 'set-a-real-one';
+GRANT authenticated TO pricespace_app;
+```
+
 ## Known gaps
 
 - The TypeScript seed scripts in the repo root (`seed-data.ts`,
