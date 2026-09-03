@@ -186,10 +186,10 @@ function createAdminContext(): TrpcContext {
   return {
     user: {
       id: 1,
-      openId: "admin-user",
       email: "admin@example.com",
       name: "Admin User",
-      loginMethod: "manus",
+      passwordHash: "scrypt$32768$8$1$c2FsdA==$aGFzaA==",
+      isActive: true,
       role: "admin",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -235,10 +235,10 @@ describe("admin procedures", () => {
     const ctx: TrpcContext = {
       user: {
         id: 2,
-        openId: "regular-user",
         email: "user@example.com",
         name: "Regular User",
-        loginMethod: "manus",
+        passwordHash: "scrypt$32768$8$1$c2FsdA==$aGFzaA==",
+        isActive: true,
         role: "user",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -263,10 +263,10 @@ describe("auth.logout", () => {
     const ctx: TrpcContext = {
       user: {
         id: 1,
-        openId: "test-user",
         email: "test@example.com",
         name: "Test User",
-        loginMethod: "manus",
+        passwordHash: "scrypt$32768$8$1$c2FsdA==$aGFzaA==",
+        isActive: true,
         role: "user",
         createdAt: new Date(),
         updatedAt: new Date(),

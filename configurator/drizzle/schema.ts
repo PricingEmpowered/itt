@@ -15,13 +15,18 @@ import {
 
 // ─── Core Auth ────────────────────────────────────────────────────────────────
 
+/**
+ * Local user accounts, keyed by email and carrying their own password hash.
+ * Provisioned with `pnpm create-user`; there is no self-service sign-up.
+ */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  /** scrypt hash written by server/_core/password.ts. Never a reversible value. */
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

@@ -15,10 +15,10 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
   const user: AuthenticatedUser = {
     id: 1,
-    openId: "sample-user",
     email: "sample@example.com",
     name: "Sample User",
-    loginMethod: "manus",
+    passwordHash: "scrypt$32768$8$1$c2FsdA==$aGFzaA==",
+    isActive: true,
     role: "user",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -54,7 +54,10 @@ describe("auth.logout", () => {
     expect(clearedCookies[0]?.options).toMatchObject({
       maxAge: -1,
       secure: true,
-      sameSite: "none",
+      // "lax", not "none": the API and frontend are same-origin here, and
+      // "none" requires Secure, which silently drops the cookie over plain
+      // HTTP on an internal network.
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
     });

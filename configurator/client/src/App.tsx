@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { QuoteProvider } from "./contexts/QuoteContext";
 import Home from "./pages/Home";
+import Login from "./pages/Login";
 import Configurator from "./pages/Configurator";
 import Admin from "./pages/Admin";
 import QuoteCart from "./pages/QuoteCart";
@@ -27,6 +28,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={Login} />
       <Route path="/configure" component={Configurator} />
       <Route path="/configure/:family" component={Configurator} />
       <Route path="/quote" component={QuoteCart} />

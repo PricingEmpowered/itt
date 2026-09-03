@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { LOGIN_PATH } from "@/const";
 import { trpc } from "@/lib/trpc";
 import TopNav from "@/components/TopNav";
 import { Button } from "@/components/ui/button";
@@ -142,10 +142,10 @@ function SignInScreen() {
 
           <Button
             className="w-full h-12 text-base font-semibold gap-2 bg-primary hover:bg-primary/90"
-            onClick={() => (window.location.href = getLoginUrl())}
+            onClick={() => (window.location.href = LOGIN_PATH)}
           >
             <LogIn className="w-5 h-5" />
-            Sign in with Manus
+            Sign in
           </Button>
 
           <div className="mt-8 grid grid-cols-3 gap-4 pt-6 border-t border-white/10">

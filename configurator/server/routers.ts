@@ -1,11 +1,19 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
+import { hashPassword, verifyPassword } from "./_core/password";
+import {
+  clearSessionCookie,
+  createSessionToken,
+  setSessionCookie,
+} from "./_core/session";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import {
+  getUserByEmail,
+  getUserById,
+  recordSignIn,
+  setUserPassword,
   lookupProductByDescription,
   searchProducts,
   getPricingRules,
@@ -114,11 +122,68 @@ export const appRouter = router({
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+
+    /**
+     * The same message is returned for an unknown email, a wrong password and
+     * a deactivated account, and a dummy hash is verified in those cases so
+     * response time does not reveal which emails exist.
+     */
+    signIn: publicProcedure
+      .input(
+        z.object({
+          email: z.string().trim().min(3).max(320).email(),
+          password: z.string().min(1).max(200),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const user = await getUserByEmail(input.email);
+
+        const storedHash =
+          user && user.isActive
+            ? user.passwordHash
+            : "scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+        const passwordMatches = await verifyPassword(input.password, storedHash);
+
+        if (!user || !user.isActive || !passwordMatches) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid email or password",
+          });
+        }
+
+        await recordSignIn(user.id);
+        setSessionCookie(ctx.req, ctx.res, await createSessionToken(user.id));
+
+        return { id: user.id, email: user.email, name: user.name, role: user.role };
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      clearSessionCookie(ctx.req, ctx.res);
       return { success: true } as const;
     }),
+
+    changePassword: protectedProcedure
+      .input(
+        z.object({
+          currentPassword: z.string().min(1).max(200),
+          newPassword: z.string().min(12).max(200),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const user = await getUserById(ctx.user.id);
+        if (
+          !user ||
+          !(await verifyPassword(input.currentPassword, user.passwordHash))
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Current password is incorrect",
+          });
+        }
+        await setUserPassword(user.id, await hashPassword(input.newPassword));
+        return { success: true } as const;
+      }),
   }),
 
   // ─── Configurator ───────────────────────────────────────────────────────────
@@ -295,7 +360,7 @@ export const appRouter = router({
           basePrice: input.basePrice,
           customUpchargePct: input.customUpchargePct,
           notes: input.notes,
-          updatedBy: ctx.user.name ?? ctx.user.openId,
+          updatedBy: ctx.user.name ?? ctx.user.email,
         });
         return { success: true };
       }),

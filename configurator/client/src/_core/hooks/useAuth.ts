@@ -1,4 +1,4 @@
-import { getLoginUrl } from "@/const";
+import { LOGIN_PATH } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
@@ -9,7 +9,7 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
+  const { redirectOnUnauthenticated = false, redirectPath = LOGIN_PATH } =
     options ?? {};
   const utils = trpc.useUtils();
 
@@ -42,10 +42,9 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    // The signed-in user is deliberately not mirrored into localStorage:
+    // nothing reads it there, and it would put account details somewhere they
+    // do not need to be.
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,

@@ -18,7 +18,7 @@ import {
   Loader2, ArrowLeft, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getLoginUrl } from "@/const";
+import { LOGIN_PATH } from "@/const";
 
 type RfqStatus = "pending" | "reviewing" | "quoted" | "closed";
 
@@ -372,7 +372,7 @@ export default function Admin() {
               <h2 className="text-xl font-bold">Sign In Required</h2>
               <p className="text-muted-foreground text-sm mt-2">You must be signed in as an admin to access this area.</p>
             </div>
-            <a href={getLoginUrl()}>
+            <a href={LOGIN_PATH}>
               <Button className="gap-2 bg-primary hover:bg-primary/90">Sign In</Button>
             </a>
           </div>

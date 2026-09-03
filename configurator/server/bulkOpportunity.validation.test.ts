@@ -7,10 +7,10 @@ function createAuthContext(): TrpcContext {
   return {
     user: {
       id: 1,
-      openId: "bulk-opportunity-test-user",
       email: "sales@example.com",
       name: "Sales Test",
-      loginMethod: "manus",
+      passwordHash: "scrypt$32768$8$1$c2FsdA==$aGFzaA==",
+      isActive: true,
       role: "user",
       createdAt: new Date(),
       updatedAt: new Date(),

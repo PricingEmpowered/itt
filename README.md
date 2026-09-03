@@ -113,15 +113,12 @@ commissions, reporting — runs with no outbound access.
 ## The configurator
 
 `configurator/` holds the ITT Connectors Product Configurator ("Smart Target
-Pricing Engine"), a separate full-stack app built on Manus: React 19, tRPC,
-Drizzle on MySQL, 29 tables and 24 pages. It is checked in so the work is
-under version control and off that platform.
+Pricing Engine"): React 19, tRPC, Drizzle on MySQL, 29 tables and 24 pages.
 
-It is **not** wired into Price Space and is not part of this deployment. It
-still depends on Manus platform services (OAuth identity, an LLM API, an S3
-storage proxy, the Manus Vite runtime plugin). Its dependencies do install
-cleanly outside Manus, so replacing those is the starting point if it is
-taken forward.
+It runs standalone and is **not** wired into Price Space or part of this
+deployment. It has no external service dependencies: sign-in is local email
+and password, and it makes no outbound calls at runtime. See
+[`configurator/README.md`](configurator/README.md).
 
 ## Historical documents
 
