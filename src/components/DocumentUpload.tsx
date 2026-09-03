@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { getCurrentUser } from '../lib/currentUser';
-import { supabase } from '../lib/supabase';
 import { db } from '../lib/dataClient';
 import { Upload, File, Trash2, Download, X } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -76,31 +74,26 @@ export function DocumentUpload() {
 
     setUploading(true);
     try {
-      const { data: { user } } = await getCurrentUser();
-      if (!user) throw new Error('Not authenticated');
+      // The server writes the file and its metadata row together, so a
+      // failed insert cannot leave an orphaned file behind. The stored path
+      // is chosen server-side.
+      const params = new URLSearchParams({
+        fileName: selectedFile.name,
+        category,
+      });
+      if (description) params.set('description', description);
 
-      const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const response = await fetch(`/api/documents?${params.toString()}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': selectedFile.type || 'application/octet-stream' },
+        body: selectedFile,
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from('pricing-documents')
-        .upload(fileName, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      const { error: dbError } = await db
-        .from('pricing_documents')
-        .insert({
-          file_name: selectedFile.name,
-          file_path: fileName,
-          file_size: selectedFile.size,
-          file_type: selectedFile.type,
-          category,
-          description: description || null,
-          uploaded_by: user.id
-        });
-
-      if (dbError) throw dbError;
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || 'Upload failed');
+      }
 
       await loadDocuments();
       setShowUploadModal(false);
@@ -117,13 +110,12 @@ export function DocumentUpload() {
 
   const handleDownload = async (doc: Document) => {
     try {
-      const { data, error } = await supabase.storage
-        .from('pricing-documents')
-        .download(doc.file_path);
+      const response = await fetch(`/api/documents/${doc.id}/download`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Download failed');
 
-      if (error) throw error;
-
-      const url = URL.createObjectURL(data);
+      const url = URL.createObjectURL(await response.blob());
       const a = document.createElement('a');
       a.href = url;
       a.download = doc.file_name;
@@ -141,18 +133,12 @@ export function DocumentUpload() {
     if (!confirm('Are you sure you want to delete this document?')) return;
 
     try {
-      const { error: storageError } = await supabase.storage
-        .from('pricing-documents')
-        .remove([doc.file_path]);
-
-      if (storageError) throw storageError;
-
-      const { error: dbError } = await db
-        .from('pricing_documents')
-        .delete()
-        .eq('id', doc.id);
-
-      if (dbError) throw dbError;
+      // One call removes the row and the file together.
+      const response = await fetch(`/api/documents/${doc.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Delete failed');
 
       await loadDocuments();
     } catch (error) {

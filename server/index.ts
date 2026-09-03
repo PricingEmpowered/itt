@@ -10,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
+import { registerAiAnalyticsRoutes } from './aiAnalytics.js';
 import { closePool, pool } from './db.js';
+import { registerDocumentRoutes } from './documents.js';
 import { ENV } from './env.js';
 import { appRouter } from './routers/index.js';
 import { createContext } from './trpc.js';
@@ -38,6 +40,9 @@ async function main() {
       });
     }
   });
+
+  registerDocumentRoutes(app);
+  registerAiAnalyticsRoutes(app);
 
   app.use(
     '/api/trpc',

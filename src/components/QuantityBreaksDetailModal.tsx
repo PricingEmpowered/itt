@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, TrendingUp, AlertCircle, CheckCircle, Target, Package } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { trpcClient } from '../lib/trpcClient';
 import { db } from '../lib/dataClient';
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, Area } from 'recharts';
 
@@ -64,77 +64,11 @@ export function QuantityBreaksDetailModal({ product, onClose }: Props) {
   };
 
   const loadHistogram = async () => {
-    const { data, error } = await supabase.rpc('execute_analytics_query', {
-      query: `
-        WITH order_data AS (
-          SELECT
-            ql.quantity,
-            ql.quantity * ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100) as revenue,
-            COALESCE(ql.discount_applied, 0) as discount_percent
-          FROM quote_lines ql
-          JOIN quotes q ON q.id = ql.quote_id
-          WHERE ql.product_id = '${product.product_id}'
-            AND q.status != 'Cancelled'
-        ),
-        buckets AS (
-          SELECT
-            CASE
-              WHEN quantity <= 5 THEN '1-5'
-              WHEN quantity <= 10 THEN '6-10'
-              WHEN quantity <= 15 THEN '11-15'
-              WHEN quantity <= 20 THEN '16-20'
-              WHEN quantity <= 30 THEN '21-30'
-              WHEN quantity <= 40 THEN '31-40'
-              WHEN quantity <= 50 THEN '41-50'
-              WHEN quantity <= 75 THEN '51-75'
-              WHEN quantity <= 100 THEN '76-100'
-              ELSE '100+'
-            END as quantity_bucket,
-            CASE
-              WHEN quantity <= 5 THEN 1
-              WHEN quantity <= 10 THEN 6
-              WHEN quantity <= 15 THEN 11
-              WHEN quantity <= 20 THEN 16
-              WHEN quantity <= 30 THEN 21
-              WHEN quantity <= 40 THEN 31
-              WHEN quantity <= 50 THEN 41
-              WHEN quantity <= 75 THEN 51
-              WHEN quantity <= 100 THEN 76
-              ELSE 101
-            END as bucket_min,
-            CASE
-              WHEN quantity <= 5 THEN 5
-              WHEN quantity <= 10 THEN 10
-              WHEN quantity <= 15 THEN 15
-              WHEN quantity <= 20 THEN 20
-              WHEN quantity <= 30 THEN 30
-              WHEN quantity <= 40 THEN 40
-              WHEN quantity <= 50 THEN 50
-              WHEN quantity <= 75 THEN 75
-              WHEN quantity <= 100 THEN 100
-              ELSE 999
-            END as bucket_max,
-            quantity,
-            revenue,
-            discount_percent
-          FROM order_data
-        )
-        SELECT
-          quantity_bucket,
-          bucket_min,
-          bucket_max,
-          COUNT(*) as order_count,
-          SUM(quantity) as total_quantity,
-          ROUND(AVG(discount_percent), 2) as avg_discount,
-          ROUND(SUM(revenue), 2) as total_revenue
-        FROM buckets
-        GROUP BY quantity_bucket, bucket_min, bucket_max
-        ORDER BY bucket_min
-      `
-    });
-
-    if (error) throw error;
-    setHistogram(data || []);
+    setHistogram(
+      (await trpcClient.analytics.productQuantityHistogram.query({
+        productId: product.product_id,
+      })) as unknown as QuantityHistogramData[]
+    );
   };
 
   const loadCurrentBreaks = async () => {

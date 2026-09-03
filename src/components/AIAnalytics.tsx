@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Brain, Send, Download, AlertCircle, CheckCircle, Clock, Sparkles } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { trpc } from '../lib/trpc';
 
 interface QueryResult {
   success: boolean;
@@ -37,25 +37,12 @@ export function AIAnalytics() {
     setResult(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-analytics`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            question: question.trim(),
-            provider: 'openai',
-          }),
-        }
-      );
+      const response = await fetch('/api/ai-analytics', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: question.trim() }),
+      });
 
       const data = await response.json();
 
@@ -115,6 +102,34 @@ export function AIAnalytics() {
   const useExample = (example: string) => {
     setQuestion(example);
   };
+
+  const capabilities = trpc.system.capabilities.useQuery();
+
+  /*
+   * This deployment may have no language model available (an air-gapped
+   * server has none). Say so plainly rather than presenting an input that
+   * cannot work.
+   */
+  if (capabilities.data && !capabilities.data.aiAnalytics) {
+    return (
+      <div className="space-y-6 fade-in">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center">
+          <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+            <Brain className="h-7 w-7 text-slate-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">
+            Ask AI is not available in this deployment
+          </h2>
+          <p className="text-sm text-slate-600 max-w-xl mx-auto">
+            Natural-language analytics needs a language model the server can reach,
+            and this installation does not have one configured. The Analytics,
+            Deal Score and Pricing Excellence sections read the same data and are
+            fully available.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">

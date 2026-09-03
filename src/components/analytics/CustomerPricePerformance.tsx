@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { trpcClient } from '../../lib/trpcClient';
 import { ArrowLeft, BarChart2, ScatterChart } from 'lucide-react';
 
 interface CustomerPricePerformanceProps {
@@ -12,30 +13,6 @@ interface CustomerData {
   status: 'above' | 'at' | 'below';
 }
 
-const mockCustomers: CustomerData[] = [
-  { name: 'A1 Solutions', priceIndex: 103.3, marginIndex: 94.4, status: 'above' },
-  { name: 'B2 Technologies', priceIndex: 96.4, marginIndex: 107.0, status: 'at' },
-  { name: 'C3 Industries', priceIndex: 101.5, marginIndex: 101.3, status: 'above' },
-  { name: 'D4 Systems', priceIndex: 106.9, marginIndex: 100.5, status: 'above' },
-  { name: 'E5 Innovations', priceIndex: 95.7, marginIndex: 101.4, status: 'at' },
-  { name: 'F6 Enterprises (Below Market)', priceIndex: 83.1, marginIndex: 103.5, status: 'below' },
-  { name: 'G7 Corporation', priceIndex: 104.4, marginIndex: 96.5, status: 'above' },
-  { name: 'H8 Inc', priceIndex: 99.4, marginIndex: 103.3, status: 'at' },
-  { name: 'I9 Ltd', priceIndex: 94.1, marginIndex: 79.6, status: 'below' },
-  { name: 'J10 Group (Below Market)', priceIndex: 85.0, marginIndex: 116.3, status: 'below' },
-  { name: 'K11 Solutions (Above Market)', priceIndex: 116.0, marginIndex: 76.7, status: 'above' },
-  { name: 'L12 Technologies (Below Market)', priceIndex: 71.5, marginIndex: 101.3, status: 'below' },
-  { name: 'M13 Industries (Below Market)', priceIndex: 71.0, marginIndex: 102.8, status: 'below' },
-  { name: 'N14 Systems', priceIndex: 94.9, marginIndex: 96.5, status: 'at' },
-  { name: 'O15 Innovations', priceIndex: 95.1, marginIndex: 107.3, status: 'at' },
-  { name: 'P16 Enterprises (Below Market)', priceIndex: 86.6, marginIndex: 81.6, status: 'below' },
-  { name: 'Q17 Corporation', priceIndex: 95.9, marginIndex: 99.5, status: 'at' },
-  { name: 'R18 Inc (Below Market)', priceIndex: 72.1, marginIndex: 92.9, status: 'below' },
-  { name: 'S19 Ltd', priceIndex: 96.6, marginIndex: 95.9, status: 'at' },
-  { name: 'T20 Group', priceIndex: 107.4, marginIndex: 105.9, status: 'above' },
-  { name: 'U21 Solutions (Below Market)', priceIndex: 67.9, marginIndex: 84.9, status: 'below' },
-];
-
 interface ScatterPoint {
   customer: string;
   sales: number;
@@ -43,31 +20,33 @@ interface ScatterPoint {
   status: 'above' | 'at' | 'below';
 }
 
-const scatterData: ScatterPoint[] = [
-  { customer: 'A1', sales: 50000, priceIndex: 135, status: 'above' },
-  { customer: 'B2', sales: 150000, priceIndex: 145, status: 'above' },
-  { customer: 'C3', sales: 120000, priceIndex: 155, status: 'above' },
-  { customer: 'D4', sales: 80000, priceIndex: 140, status: 'above' },
-  { customer: 'E5', sales: 200000, priceIndex: 100, status: 'at' },
-  { customer: 'F6', sales: 180000, priceIndex: 115, status: 'at' },
-  { customer: 'G7', sales: 100000, priceIndex: 105, status: 'at' },
-  { customer: 'H8', sales: 220000, priceIndex: 110, status: 'at' },
-  { customer: 'I9', sales: 1500000, priceIndex: 90, status: 'at' },
-  { customer: 'J10', sales: 3000000, priceIndex: 100, status: 'at' },
-  { customer: 'K11', sales: 4500000, priceIndex: 115, status: 'at' },
-  { customer: 'L12', sales: 4800000, priceIndex: 110, status: 'at' },
-  { customer: 'M13', sales: 1200000, priceIndex: 105, status: 'at' },
-  { customer: 'N14', sales: 60000, priceIndex: 70, status: 'below' },
-  { customer: 'O15', sales: 90000, priceIndex: 80, status: 'below' },
-  { customer: 'P16', sales: 130000, priceIndex: 85, status: 'below' },
-  { customer: 'Q17', sales: 110000, priceIndex: 75, status: 'below' },
-  { customer: 'R18', sales: 50000, priceIndex: 60, status: 'below' },
-  { customer: 'S19', sales: 70000, priceIndex: 65, status: 'below' },
-  { customer: 'T20', sales: 150000, priceIndex: 80, status: 'below' },
-];
-
 export function CustomerPricePerformance({ onBack }: CustomerPricePerformanceProps) {
   const [viewMode, setViewMode] = useState<'table' | 'scatter'>('table');
+  const [customers, setCustomers] = useState<(CustomerData & { sales: number })[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    trpcClient.analytics.customerPricePerformance
+      .query()
+      .then((data) => {
+        if (!cancelled) setCustomers(data as unknown as (CustomerData & { sales: number })[]);
+      })
+      .catch((error) => {
+        console.error('Error loading customer price performance:', error);
+        if (!cancelled) setCustomers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The scatter view plots the same customers by sales against price index.
+  const scatterData: ScatterPoint[] = customers.map((c) => ({
+    customer: c.name,
+    sales: c.sales,
+    priceIndex: c.priceIndex,
+    status: c.status,
+  }));
 
   return (
     <div className="space-y-6">
@@ -154,7 +133,7 @@ export function CustomerPricePerformance({ onBack }: CustomerPricePerformancePro
                 <span className="text-xs text-slate-500">Indexed to 100</span>
               </div>
               <div className="space-y-2">
-                {mockCustomers.map((customer, idx) => (
+                {customers.map((customer, idx) => (
                   <div key={idx} className="flex items-center gap-3">
                     <span className="text-xs text-slate-600 w-48 truncate">{customer.name}</span>
                     <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
@@ -183,7 +162,7 @@ export function CustomerPricePerformance({ onBack }: CustomerPricePerformancePro
                 <span className="text-xs text-slate-500">Indexed to 100</span>
               </div>
               <div className="space-y-2">
-                {mockCustomers.map((customer, idx) => (
+                {customers.map((customer, idx) => (
                   <div key={idx} className="flex items-center gap-3">
                     <span className="text-xs text-slate-600 w-48 truncate">{customer.name}</span>
                     <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">

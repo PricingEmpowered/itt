@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { trpcClient } from '../../lib/trpcClient';
 import { ArrowLeft, ChevronRight, ChevronDown, Search } from 'lucide-react';
 
 interface CustomerSummaryProps {
@@ -26,95 +27,30 @@ interface ProductRow {
   priceYoY: number;
 }
 
-const mockData: CustomerRow[] = [
-  {
-    id: '1',
-    name: 'D4 Systems',
-    sales: 20440.0,
-    marginPct: 37.9,
-    discountPct: 16.2,
-    priceIndex: 99.5,
-    priceYoY: 4.3,
-    products: [
-      { name: 'Network Switch Pro', sales: 8200, marginPct: 42.1, discountPct: 12.3, priceIndex: 102.3, priceYoY: 5.2 },
-      { name: 'Security Gateway', sales: 6140, marginPct: 35.8, discountPct: 18.4, priceIndex: 98.1, priceYoY: 3.8 },
-      { name: 'Storage Array', sales: 4100, marginPct: 33.2, discountPct: 19.1, priceIndex: 96.7, priceYoY: 3.1 },
-    ],
-  },
-  {
-    id: '2',
-    name: 'G7 Corporation',
-    sales: 12888.0,
-    marginPct: 36.3,
-    discountPct: 22.2,
-    priceIndex: 97.3,
-    priceYoY: 1.9,
-    products: [
-      { name: 'Network Switch Pro', sales: 5800, marginPct: 38.5, discountPct: 20.1, priceIndex: 99.2, priceYoY: 2.4 },
-      { name: 'Firewall Appliance', sales: 4288, marginPct: 34.8, discountPct: 24.5, priceIndex: 95.8, priceYoY: 1.5 },
-      { name: 'Cloud Connector', sales: 2800, marginPct: 34.6, discountPct: 22.8, priceIndex: 96.5, priceYoY: 1.8 },
-    ],
-  },
-  {
-    id: '3',
-    name: 'J10 Group',
-    sales: 11907.0,
-    marginPct: 29.6,
-    discountPct: 25.0,
-    priceIndex: 107.6,
-    priceYoY: -1.0,
-    products: [
-      { name: 'Enterprise Router', sales: 5200, marginPct: 32.1, discountPct: 22.3, priceIndex: 110.2, priceYoY: -0.5 },
-      { name: 'Load Balancer', sales: 3807, marginPct: 28.4, discountPct: 26.8, priceIndex: 106.3, priceYoY: -1.2 },
-      { name: 'VPN Gateway', sales: 2900, marginPct: 27.2, discountPct: 26.5, priceIndex: 105.8, priceYoY: -1.5 },
-    ],
-  },
-  {
-    id: '4',
-    name: 'Y25 Innovations',
-    sales: 7343.0,
-    marginPct: 26.0,
-    discountPct: 16.9,
-    priceIndex: 94.9,
-    priceYoY: 4.0,
-    products: [
-      { name: 'Storage NAS', sales: 3500, marginPct: 28.3, discountPct: 15.2, priceIndex: 96.8, priceYoY: 4.8 },
-      { name: 'Backup Solution', sales: 2343, marginPct: 24.8, discountPct: 18.1, priceIndex: 93.5, priceYoY: 3.5 },
-      { name: 'Archive System', sales: 1500, marginPct: 23.5, discountPct: 17.5, priceIndex: 93.8, priceYoY: 3.2 },
-    ],
-  },
-  {
-    id: '5',
-    name: 'N40 Group',
-    sales: 6103.0,
-    marginPct: 44.3,
-    discountPct: 26.8,
-    priceIndex: 103.6,
-    priceYoY: 0.6,
-    products: [
-      { name: 'Advanced Firewall', sales: 2800, marginPct: 46.2, discountPct: 24.5, priceIndex: 105.3, priceYoY: 1.2 },
-      { name: 'IDS/IPS System', sales: 2103, marginPct: 43.8, discountPct: 28.2, priceIndex: 102.5, priceYoY: 0.3 },
-      { name: 'Security Manager', sales: 1200, marginPct: 41.5, discountPct: 28.5, priceIndex: 102.8, priceYoY: 0.2 },
-    ],
-  },
-  {
-    id: '6',
-    name: 'T46 Enterprises',
-    sales: 4835.0,
-    marginPct: 29.7,
-    discountPct: 21.7,
-    priceIndex: 92.1,
-    priceYoY: 5.9,
-    products: [
-      { name: 'Managed Switch', sales: 2200, marginPct: 31.2, discountPct: 20.1, priceIndex: 93.8, priceYoY: 6.5 },
-      { name: 'Access Point', sales: 1635, marginPct: 28.9, discountPct: 22.5, priceIndex: 91.2, priceYoY: 5.6 },
-      { name: 'Controller', sales: 1000, marginPct: 28.1, discountPct: 22.8, priceIndex: 90.8, priceYoY: 5.1 },
-    ],
-  },
-];
-
 export function CustomerSummary({ onBack }: CustomerSummaryProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [rows, setRows] = useState<CustomerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    trpcClient.analytics.customerSummary
+      .query()
+      .then((data) => {
+        if (!cancelled) setRows(data as unknown as CustomerRow[]);
+      })
+      .catch((error) => {
+        console.error('Error loading customer summary:', error);
+        if (!cancelled) setRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const toggleRow = (id: string) => {
@@ -127,7 +63,7 @@ export function CustomerSummary({ onBack }: CustomerSummaryProps) {
     setExpandedRows(newExpanded);
   };
 
-  const filteredData = mockData.filter(customer =>
+  const filteredData = rows.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -189,6 +125,20 @@ export function CustomerSummary({ onBack }: CustomerSummaryProps) {
               </tr>
             </thead>
             <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">
+                    Loading customers...
+                  </td>
+                </tr>
+              )}
+              {!loading && filteredData.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">
+                    No customer sales in the selected period
+                  </td>
+                </tr>
+              )}
               {filteredData.map((customer) => (
                 <>
                   <tr

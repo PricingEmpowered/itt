@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, Package, Target, ChevronDown, ChevronUp } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { trpcClient } from '../lib/trpcClient';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { QuantityBreaksDetailModal } from './QuantityBreaksDetailModal';
 
@@ -73,123 +73,21 @@ export function QuantityBreaksAnalytics() {
   };
 
   const loadOrderingPatterns = async () => {
-    const { data, error } = await supabase.rpc('execute_analytics_query', {
-      query: `
-        SELECT
-          ql.product_id,
-          p.name as product_name,
-          p.category as product_category,
-          COUNT(DISTINCT ql.quote_id) as times_ordered,
-          SUM(ql.quantity) as total_quantity_ordered,
-          AVG(ql.quantity) as avg_quantity_per_order,
-          MIN(ql.quantity) as min_quantity,
-          MAX(ql.quantity) as max_quantity,
-          AVG(ql.unit_price) as avg_unit_price,
-          AVG(COALESCE(ql.discount_applied, 0)) as avg_discount_percent,
-          SUM(ql.quantity * ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100)) as total_revenue
-        FROM quote_lines ql
-        JOIN products p ON p.id = ql.product_id
-        JOIN quotes q ON q.id = ql.quote_id
-        WHERE q.status != 'Cancelled'
-        GROUP BY ql.product_id, p.name, p.category
-        ORDER BY total_quantity_ordered DESC
-        LIMIT 50
-      `
-    });
-
-    if (error) throw error;
-    setOrderingPatterns(data || []);
+    setOrderingPatterns(
+      (await trpcClient.analytics.orderingPatterns.query()) as unknown as ProductOrderingPattern[]
+    );
   };
 
   const loadBreakEffectiveness = async () => {
-    const { data, error } = await supabase.rpc('execute_analytics_query', {
-      query: `
-        WITH quantity_break_usage AS (
-          SELECT
-            ql.product_id,
-            p.name as product_name,
-            qb.id as break_id,
-            qb.min_quantity,
-            qb.max_quantity,
-            qb.discount_percent,
-            COUNT(*) as times_triggered,
-            SUM(ql.quantity) as total_quantity_in_tier,
-            AVG(ql.quantity) as avg_order_size_in_tier,
-            SUM(ql.quantity * ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100)) as revenue_in_tier,
-            SUM(ql.quantity * ql.unit_price * COALESCE(ql.discount_applied, 0) / 100) as discount_cost
-          FROM quote_lines ql
-          JOIN products p ON p.id = ql.product_id
-          JOIN quotes q ON q.id = ql.quote_id
-          JOIN quantity_breaks qb ON qb.product_id = ql.product_id
-          WHERE q.status != 'Cancelled'
-            AND ql.quantity >= qb.min_quantity
-            AND (qb.max_quantity IS NULL OR ql.quantity <= qb.max_quantity)
-          GROUP BY ql.product_id, p.name, qb.id, qb.min_quantity, qb.max_quantity, qb.discount_percent
-        )
-        SELECT
-          product_id,
-          product_name,
-          CASE
-            WHEN max_quantity IS NULL THEN min_quantity::text || '+'
-            ELSE min_quantity::text || '-' || max_quantity::text
-          END as break_tier,
-          min_quantity,
-          max_quantity,
-          discount_percent,
-          times_triggered,
-          total_quantity_in_tier,
-          ROUND(avg_order_size_in_tier, 2) as avg_order_size_in_tier,
-          ROUND(revenue_in_tier, 2) as revenue_in_tier,
-          ROUND(discount_cost, 2) as discount_cost,
-          ROUND(
-            CASE
-              WHEN discount_cost > 0 THEN (revenue_in_tier / discount_cost)
-              ELSE 0
-            END,
-            2
-          ) as effectiveness_score
-        FROM quantity_break_usage
-        ORDER BY product_name, min_quantity
-      `
-    });
-
-    if (error) throw error;
-    setBreakEffectiveness(data || []);
+    setBreakEffectiveness(
+      (await trpcClient.analytics.breakEffectiveness.query()) as unknown as QuantityBreakEffectiveness[]
+    );
   };
 
   const loadQuantityDistribution = async () => {
-    const { data, error } = await supabase.rpc('execute_analytics_query', {
-      query: `
-        SELECT
-          CASE
-            WHEN quantity <= 5 THEN '1-5'
-            WHEN quantity <= 10 THEN '6-10'
-            WHEN quantity <= 20 THEN '11-20'
-            WHEN quantity <= 50 THEN '21-50'
-            WHEN quantity <= 100 THEN '51-100'
-            ELSE '100+'
-          END as quantity_range,
-          COUNT(*) as order_count,
-          SUM(quantity * unit_price * (1 - COALESCE(discount_applied, 0) / 100)) as total_revenue,
-          AVG(COALESCE(discount_applied, 0)) as avg_discount
-        FROM quote_lines ql
-        JOIN quotes q ON q.id = ql.quote_id
-        WHERE q.status != 'Cancelled'
-        GROUP BY quantity_range
-        ORDER BY
-          CASE quantity_range
-            WHEN '1-5' THEN 1
-            WHEN '6-10' THEN 2
-            WHEN '11-20' THEN 3
-            WHEN '21-50' THEN 4
-            WHEN '51-100' THEN 5
-            WHEN '100+' THEN 6
-          END
-      `
-    });
-
-    if (error) throw error;
-    setQuantityDistribution(data || []);
+    setQuantityDistribution(
+      (await trpcClient.analytics.quantityDistribution.query()) as unknown as QuantityDistribution[]
+    );
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {

@@ -1,6 +1,6 @@
 import { X, Filter } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { trpcClient } from '../../lib/trpcClient';
 
 interface DrillDownModalProps {
   isOpen: boolean;
@@ -37,31 +37,22 @@ export function DrillDownModal({ isOpen, onClose, metric }: DrillDownModalProps)
 
   const loadDrillDownData = async () => {
     setLoading(true);
+    try {
+      const rows = (await trpcClient.analytics.metricDrillDown.query()) as unknown as DataRow[];
 
-    const mockData: DataRow[] = [
-      { customer_group: 'Enterprise', product_group: 'Valves', value: 42.5, change: 8.2, volume: 1250 },
-      { customer_group: 'Enterprise', product_group: 'Pumps', value: 38.9, change: 6.5, volume: 980 },
-      { customer_group: 'Enterprise', product_group: 'Accessories', value: 35.2, change: 4.1, volume: 750 },
-      { customer_group: 'Mid-Market', product_group: 'Valves', value: 31.8, change: 5.9, volume: 620 },
-      { customer_group: 'Mid-Market', product_group: 'Pumps', value: 28.4, change: 3.2, volume: 540 },
-      { customer_group: 'Mid-Market', product_group: 'Flow Control', value: 25.6, change: 2.8, volume: 410 },
-      { customer_group: 'Small Business', product_group: 'Accessories', value: 22.3, change: 1.5, volume: 320 },
-      { customer_group: 'Small Business', product_group: 'Controls & Automation', value: 19.8, change: 0.9, volume: 280 },
-      { customer_group: 'Small Business', product_group: 'Flow Control', value: 17.2, change: 0.5, volume: 190 },
-    ];
+      const filteredData = rows.filter(
+        (row) =>
+          (filters.customerGroup === 'all' || row.customer_group === filters.customerGroup) &&
+          (filters.productGroup === 'all' || row.product_group === filters.productGroup)
+      );
 
-    let filteredData = mockData;
-
-    if (filters.customerGroup !== 'all') {
-      filteredData = filteredData.filter(row => row.customer_group === filters.customerGroup);
+      setData(filteredData);
+    } catch (error) {
+      console.error('Error loading drill-down data:', error);
+      setData([]);
+    } finally {
+      setLoading(false);
     }
-
-    if (filters.productGroup !== 'all') {
-      filteredData = filteredData.filter(row => row.product_group === filters.productGroup);
-    }
-
-    setData(filteredData);
-    setLoading(false);
   };
 
   if (!isOpen || !metric) return null;

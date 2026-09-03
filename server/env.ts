@@ -58,6 +58,16 @@ export const ENV = {
   /** How long a session cookie stays valid. */
   sessionTtlMs: optionalNumber('SESSION_TTL_HOURS', 12) * 60 * 60 * 1000,
   /**
+   * Natural-language analytics ("Ask AI") requires an outbound LLM endpoint.
+   * An air-gapped install has none, so the feature is off unless explicitly
+   * enabled and pointed at a reachable model. The frontend asks the server
+   * whether it is available rather than assuming.
+   */
+  aiEnabled: process.env.AI_ENABLED === 'true' && Boolean(process.env.LLM_API_URL),
+  llmApiUrl: process.env.LLM_API_URL ?? null,
+  llmApiKey: process.env.LLM_API_KEY ?? null,
+
+  /**
    * Where uploaded documents are written. Only metadata lives in the
    * database; the bytes live here on the server's own disk.
    */

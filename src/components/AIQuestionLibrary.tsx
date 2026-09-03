@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { BookOpen, Play, Plus, Trash2, CheckCircle, AlertCircle, Filter, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { db } from '../lib/dataClient';
 
 interface Question {
@@ -61,23 +60,12 @@ export function AIQuestionLibrary() {
     setTesting(question.id);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-analytics`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            question: question.question,
-            provider: 'openai',
-          }),
-        }
-      );
+      const response = await fetch('/api/ai-analytics', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: question.question }),
+      });
 
       const data = await response.json();
 

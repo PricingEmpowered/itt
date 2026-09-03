@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { trpcClient } from '../../lib/trpcClient';
 import { ArrowLeft } from 'lucide-react';
 
 interface MixAnalysisProps {
@@ -14,30 +15,30 @@ interface SegmentData {
   mixImpact: number;
 }
 
-const mockSegmentData: SegmentData[] = [
-  {
-    name: 'Electronics',
-    currentShare: 60.3,
-    previousShare: 61.8,
-    currentMargin: 42.5,
-    previousMargin: 40.0,
-    mixImpact: 0.9,
-  },
-  {
-    name: 'Software',
-    currentShare: 39.7,
-    previousShare: 38.2,
-    currentMargin: 67.5,
-    previousMargin: 66.0,
-    mixImpact: 2.0,
-  },
-];
-
 export function MixAnalysis({ onBack }: MixAnalysisProps) {
   const [dimension, setDimension] = useState<'product' | 'customer'>('product');
+  const [segmentData, setSegmentData] = useState<SegmentData[]>([]);
 
-  const totalMixImpact = mockSegmentData.reduce((sum, seg) => sum + seg.mixImpact, 0);
-  const totalMargin = mockSegmentData.reduce(
+  // The dimension toggle now actually changes the grouping, product category
+  // versus customer segment, rather than relabelling fixed numbers.
+  useEffect(() => {
+    let cancelled = false;
+    trpcClient.analytics.mixAnalysis
+      .query({ dimension })
+      .then((data) => {
+        if (!cancelled) setSegmentData(data as unknown as SegmentData[]);
+      })
+      .catch((error) => {
+        console.error('Error loading mix analysis:', error);
+        if (!cancelled) setSegmentData([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dimension]);
+
+  const totalMixImpact = segmentData.reduce((sum, seg) => sum + seg.mixImpact, 0);
+  const totalMargin = segmentData.reduce(
     (sum, seg) => sum + (seg.currentShare / 100) * seg.currentMargin,
     0
   );
@@ -74,7 +75,7 @@ export function MixAnalysis({ onBack }: MixAnalysisProps) {
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-900 mb-6">Revenue Share Comparison</h3>
         <div className="space-y-6">
-          {mockSegmentData.map((segment, idx) => (
+          {segmentData.map((segment, idx) => (
             <div key={idx}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-slate-700">{segment.name}</span>
@@ -118,7 +119,7 @@ export function MixAnalysis({ onBack }: MixAnalysisProps) {
         <h3 className="text-lg font-semibold text-slate-900 mb-6">Margin Impact by Segment</h3>
         <div className="relative h-64 border border-slate-200 rounded-lg p-4 bg-slate-50">
           <div className="absolute inset-4 flex items-end justify-around">
-            {mockSegmentData.map((segment, idx) => {
+            {segmentData.map((segment, idx) => {
               const maxMargin = 80;
               const currentHeight = (segment.currentMargin / maxMargin) * 100;
               const previousHeight = (segment.previousMargin / maxMargin) * 100;
@@ -202,7 +203,7 @@ export function MixAnalysis({ onBack }: MixAnalysisProps) {
               </tr>
             </thead>
             <tbody>
-              {mockSegmentData.map((segment, idx) => (
+              {segmentData.map((segment, idx) => (
                 <tr key={idx} className="border-b border-slate-100">
                   <td className="py-3 px-4 font-medium text-slate-900">{segment.name}</td>
                   <td className="py-3 px-4 text-right text-slate-700">
