@@ -90,12 +90,18 @@ user, and a Draft quote belonging to someone else still returns no lines.
 
 **Connect as a non-owner role.** Table owners and superusers bypass RLS. Run
 migrations as the owning role, but have the application connect as a separate
-least-privilege role that has been granted `authenticated`:
+least-privilege role. `db/app-role.sql` sets one up:
 
-```sql
-CREATE ROLE pricespace_app LOGIN PASSWORD 'set-a-real-one';
-GRANT authenticated TO pricespace_app;
+```bash
+psql "$DATABASE_URL" -v app_password="'choose-a-real-one'" -f db/app-role.sql
 ```
+
+That role is granted `authenticated` (which the API assumes per request via
+`SET LOCAL ROLE`) plus `SELECT, UPDATE` on `auth.users`. The latter is
+deliberate: the API verifies passwords itself, so the role it connects as has
+to read the credential table. `authenticated` remains denied it, and every
+application query runs as `authenticated` — only the login path, which never
+switches role, can reach it.
 
 ## Known gaps
 
