@@ -1,0 +1,1 @@
+ALTER TABLE `bulk_quote_opportunities` ADD `costValidationNotes` text;

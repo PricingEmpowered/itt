@@ -1,0 +1,1 @@
+ALTER TABLE `quote_workflow_items` ADD `customCost` decimal(10,2);

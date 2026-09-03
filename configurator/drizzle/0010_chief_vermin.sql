@@ -1,0 +1,1 @@
+ALTER TABLE `quote_workflows` ADD `competitors` json;

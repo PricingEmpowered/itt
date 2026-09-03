@@ -1,0 +1,105 @@
+CREATE TABLE `bulk_quote_opportunities` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`opportunityToken` varchar(128) NOT NULL,
+	`name` varchar(180) NOT NULL,
+	`status` enum('draft','imported','pricing','review','ready_for_approval','submitted','closed') NOT NULL DEFAULT 'draft',
+	`sourceFileName` varchar(255),
+	`sourceFormat` enum('minimal','spa_extract','parts_view','worksheet','csv','other') DEFAULT 'minimal',
+	`sourceSheet` varchar(128),
+	`importedRows` int NOT NULL DEFAULT 0,
+	`validRows` int NOT NULL DEFAULT 0,
+	`invalidRows` int NOT NULL DEFAULT 0,
+	`customerId` int,
+	`customerName` varchar(128) NOT NULL,
+	`customerTier` varchar(32) DEFAULT 'Mid',
+	`quoteChannel` enum('OEM','Distribution') NOT NULL DEFAULT 'OEM',
+	`quoteToCustomerSpec` boolean NOT NULL DEFAULT false,
+	`customerSpecReference` varchar(128),
+	`sourcingPosition` enum('competitive','sole_source','mixed','unknown') NOT NULL DEFAULT 'unknown',
+	`competitors` json,
+	`targetRevenue` decimal(14,2),
+	`targetMarginPct` float DEFAULT 35,
+	`targetWinProbability` float,
+	`recentQuoteSummary` text,
+	`recentQuoteDate` date,
+	`priorBookingValue` decimal(14,2),
+	`expectedBookingValue` decimal(14,2),
+	`bookingEvidence` text,
+	`posValidation` enum('validated','partial','unavailable','not_applicable') NOT NULL DEFAULT 'not_applicable',
+	`posSupporters` text,
+	`distributorMarginTargetPct` float,
+	`ittMarginTargetPct` float,
+	`dealScore` float,
+	`scoreBand` enum('strong','review','high_risk'),
+	`scoreConfidence` enum('high','medium','low'),
+	`scoreRecommendation` varchar(255),
+	`scoreDrivers` json,
+	`linkedWorkflowToken` varchar(128),
+	`createdBy` varchar(128),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `bulk_quote_opportunities_id` PRIMARY KEY(`id`),
+	CONSTRAINT `bulk_quote_opportunities_opportunityToken_unique` UNIQUE(`opportunityToken`)
+);
+--> statement-breakpoint
+CREATE TABLE `bulk_quote_opportunity_items` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`opportunityToken` varchar(128) NOT NULL,
+	`sourceRow` int NOT NULL,
+	`sourcePartNumber` varchar(255),
+	`requestedPartNumber` varchar(255),
+	`ittPartNumber` varchar(255),
+	`description` text,
+	`family` varchar(64),
+	`productLine` varchar(64),
+	`customerRevision` varchar(64),
+	`quantity` int NOT NULL DEFAULT 1,
+	`annualUsage` int,
+	`minimumOrderQty` int,
+	`leadTimeWeeks` int,
+	`standardCost` decimal(12,4),
+	`projectedCost` decimal(12,4),
+	`listPrice` decimal(12,4),
+	`currentAwardPrice` decimal(12,4),
+	`competitorPrice` decimal(12,4),
+	`currentAwardMoq` int,
+	`vendorCount` int,
+	`targetPrice` decimal(12,4),
+	`floorPrice` decimal(12,4),
+	`recommendedTier` enum('aggressive','target','conservative'),
+	`selectedTier` enum('aggressive','target','conservative'),
+	`proposedPrice` decimal(12,4),
+	`winProbability` float,
+	`grossMarginPct` float,
+	`priceConfidence` enum('High','Medium','Low'),
+	`reviewStatus` enum('pending','approved_target','exception','rejected','invalid') NOT NULL DEFAULT 'pending',
+	`exceptionPrice` decimal(12,4),
+	`exceptionReason` text,
+	`exceptionOwner` varchar(128),
+	`costValidation` enum('validated','estimated','missing') NOT NULL DEFAULT 'missing',
+	`validationErrors` json,
+	`sourceData` json,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `bulk_quote_opportunity_items_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `bulk_quote_review_events` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`opportunityToken` varchar(128) NOT NULL,
+	`itemId` int,
+	`action` enum('imported','priced','bulk_approved','tier_changed','exception_flagged','exception_resolved','rejected','submitted') NOT NULL,
+	`details` text,
+	`actedBy` varchar(128) NOT NULL,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `bulk_quote_review_events_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE INDEX `idx_bqo_status` ON `bulk_quote_opportunities` (`status`);--> statement-breakpoint
+CREATE INDEX `idx_bqo_customer` ON `bulk_quote_opportunities` (`customerId`);--> statement-breakpoint
+CREATE INDEX `idx_bqo_token` ON `bulk_quote_opportunities` (`opportunityToken`);--> statement-breakpoint
+CREATE INDEX `idx_bqoi_opportunity` ON `bulk_quote_opportunity_items` (`opportunityToken`);--> statement-breakpoint
+CREATE INDEX `idx_bqoi_status` ON `bulk_quote_opportunity_items` (`reviewStatus`);--> statement-breakpoint
+CREATE INDEX `idx_bqoi_part` ON `bulk_quote_opportunity_items` (`ittPartNumber`);--> statement-breakpoint
+CREATE INDEX `idx_bqre_opportunity` ON `bulk_quote_review_events` (`opportunityToken`);--> statement-breakpoint
+CREATE INDEX `idx_bqre_item` ON `bulk_quote_review_events` (`itemId`);
