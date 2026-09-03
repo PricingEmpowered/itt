@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Product, Customer, PriceList, Quote, QuoteLine, ProductFamily, QuantityBreak, Currency, Service, QuoteService } from '../types';
+import { Product, Customer, PriceList, QuoteLine, ProductFamily, QuantityBreak, Currency, Service, QuoteService } from '../types';
 import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones, Calculator } from 'lucide-react';
 import { PriceGuidance } from './PriceGuidance';
 import { RulesPricingModal } from './RulesPricingModal';
 import { calculateDealScore } from '../utils/dealScoreCalculator';
 import { DealScoreIndicator } from './DealScoreIndicator';
-import { calculatePriceWithQuantityBreaks, getAvailableQuantityBreaks, formatQuantityBreakRange, formatQuantityBreakPricing } from '../utils/quantityBreakCalculator';
+import { calculatePriceWithQuantityBreaks, getAvailableQuantityBreaks } from '../utils/quantityBreakCalculator';
 import { calculateWinProbability } from '../utils/winProbabilityCalculator';
 import { WinProbability } from './WinProbability';
+import { deriveListPrice, discountFromListPrice } from '../utils/listPrice';
 
 export function QuoteBuilder() {
   const [products, setProducts] = useState<(Product & { family?: ProductFamily })[]>([]);
@@ -180,24 +181,6 @@ export function QuoteBuilder() {
     }
   };
 
-  const addServiceLine = (serviceId: string) => {
-    const service = services.find(s => s.id === serviceId);
-    if (!service) return;
-
-    setServiceLines([
-      ...serviceLines,
-      {
-        service_id: serviceId,
-        billing_period: 'annual',
-        quantity: 1,
-        unit_price: service.base_price_annual,
-        discount_applied: 0,
-        line_total: service.base_price_annual,
-        contract_term_months: 12,
-      },
-    ]);
-  };
-
   const updateServiceLine = (index: number, field: string, value: any) => {
     const updated = [...serviceLines];
     updated[index] = { ...updated[index], [field]: value };
@@ -242,7 +225,7 @@ export function QuoteBuilder() {
     if (field === 'product_id') {
       const product = products.find((p) => p.id === value);
       if (product) {
-        updated[index].unit_price = product.base_cost * 1.5;
+        updated[index].unit_price = deriveListPrice(product);
       }
     }
 
@@ -293,7 +276,7 @@ export function QuoteBuilder() {
     setQuoteLines(quoteLines.filter((_, i) => i !== index));
   };
 
-  const handleRulesPriceCalculated = (price: number, details: any) => {
+  const handleRulesPriceCalculated = (price: number, _details: any) => {
     if (rulesPricingLineIndex !== null) {
       updateLine(rulesPricingLineIndex, 'unit_price', price);
     }
@@ -342,7 +325,7 @@ export function QuoteBuilder() {
       const totalDiscount = quoteLines.reduce((sum, line) => {
         const product = products.find(p => p.id === line.product_id);
         if (!product) return sum;
-        const discountPercent = ((product.list_price - (line.unit_price || 0)) / product.list_price) * 100;
+        const discountPercent = discountFromListPrice(product, line.unit_price || 0);
         return sum + discountPercent;
       }, 0);
       const averageDiscount = quoteLines.length > 0 ? totalDiscount / quoteLines.length : 0;

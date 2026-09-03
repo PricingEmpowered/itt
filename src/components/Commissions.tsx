@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { DollarSign, Users, TrendingUp, Award, Calendar, Filter, CheckCircle, Clock, Banknote } from 'lucide-react';
+import { DollarSign, Award, CheckCircle, Clock, Banknote } from 'lucide-react';
 
 interface Commission {
   id: string;

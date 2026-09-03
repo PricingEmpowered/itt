@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { QuantityBreak, Product, PriceList, ProductFamily } from '../types';
-import { Plus, Trash2, Edit2, Save, X, Layers, Copy } from 'lucide-react';
+import { Plus, Trash2, X, Layers, Copy } from 'lucide-react';
 
 export function QuantityBreaks() {
   const [quantityBreaks, setQuantityBreaks] = useState<QuantityBreak[]>([]);
@@ -9,7 +9,6 @@ export function QuantityBreaks() {
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [productFamilies, setProductFamilies] = useState<ProductFamily[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showBulkForm, setShowBulkForm] = useState(false);
   const [filterProductId, setFilterProductId] = useState('');
@@ -177,20 +176,6 @@ export function QuantityBreaks() {
   const getFilteredProductsForBulk = () => {
     if (!bulkFamilyFilter) return products;
     return products.filter(p => p.family_id === bulkFamilyFilter);
-  };
-
-  const selectByFamily = (familyId: string) => {
-    const familyProducts = products.filter(p => p.family_id === familyId);
-    const familyProductIds = familyProducts.map(p => p.id);
-    setSelectedProducts(prev => {
-      const newSelection = [...prev];
-      familyProductIds.forEach(id => {
-        if (!newSelection.includes(id)) {
-          newSelection.push(id);
-        }
-      });
-      return newSelection;
-    });
   };
 
   const resetForm = () => {

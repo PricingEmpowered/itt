@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface MarginAnalysisChartProps {
   filters: {
@@ -134,17 +134,10 @@ export function MarginAnalysisChart({ filters }: MarginAnalysisChartProps) {
           domain={[0, 'auto']}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Legend
-          wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }}
-          payload={[
-            { value: 'Base/Final', type: 'square', color: '#3b82f6' },
-            { value: 'Positive Effect', type: 'square', color: '#10b981' },
-            { value: 'Negative Effect', type: 'square', color: '#ef4444' },
-          ]}
-        />
-        <Bar dataKey="baseValue" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="positiveEffect" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="negativeEffect" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+        <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
+        <Bar dataKey="baseValue" name="Base/Final" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="positiveEffect" name="Positive Effect" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="negativeEffect" name="Negative Effect" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

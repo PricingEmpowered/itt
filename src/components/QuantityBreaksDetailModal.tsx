@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, TrendingUp, AlertCircle, CheckCircle, Target, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, Area } from 'recharts';
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, Area } from 'recharts';
 
 interface ProductOrderingPattern {
   product_id: string;

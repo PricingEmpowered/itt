@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Quote, QuoteLine, Customer, Product, Region, Industry } from '../types';
-import { FileText, Eye, Edit2, Trash2, Search, Filter, Printer, Clock } from 'lucide-react';
+import { Eye, Trash2, Search, Filter, Printer, Clock } from 'lucide-react';
 import { generateQuotePDF } from '../utils/pdfGenerator';
 import { DealScoreIndicator, DealScoreCard } from './DealScoreIndicator';
 
@@ -346,7 +346,7 @@ export function Quotes() {
                   <DealScoreIndicator score={quote.deal_score} size="small" />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(quote.created_at).toLocaleDateString()}
+                  {quote.created_at ? new Date(quote.created_at).toLocaleDateString() : '—'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {quote.turnaround_time_hours ? (
@@ -428,7 +428,7 @@ function QuoteDetailModal({ quote, onClose }: QuoteDetailModalProps) {
             <div>
               <h3 className="text-2xl font-bold text-gray-900">{quote.id}</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Created {new Date(quote.created_at).toLocaleDateString()}
+                Created {quote.created_at ? new Date(quote.created_at).toLocaleDateString() : '—'}
               </p>
             </div>
             <div className="flex items-center gap-3">

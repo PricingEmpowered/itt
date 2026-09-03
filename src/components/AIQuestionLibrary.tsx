@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, Play, Plus, Trash2, Edit2, CheckCircle, AlertCircle, Filter } from 'lucide-react';
+import { BookOpen, Play, Plus, Trash2, CheckCircle, AlertCircle, Filter, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface Question {
@@ -29,6 +29,8 @@ export function AIQuestionLibrary() {
   const [testResults, setTestResults] = useState<Map<string, TestResult>>(new Map());
   const [testing, setTesting] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const categories = ['all', 'customer', 'product', 'pricing', 'time_series', 'regional', 'general'];
   const difficulties = ['all', 'easy', 'medium', 'hard'];
@@ -111,6 +113,34 @@ export function AIQuestionLibrary() {
       await loadQuestions();
     } catch (error) {
       console.error('Error deleting question:', error);
+    }
+  };
+
+  const addQuestion = async (draft: QuestionDraft) => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const { error } = await supabase.from('ai_analytics_questions').insert({
+        category: draft.category,
+        question: draft.question.trim(),
+        expected_sql: draft.expected_sql.trim(),
+        description: draft.description.trim() || null,
+        difficulty: draft.difficulty,
+        views_used: draft.views_used
+          .split(',')
+          .map((v) => v.trim())
+          .filter(Boolean),
+        is_active: draft.is_active,
+      });
+
+      if (error) throw error;
+      setShowAddModal(false);
+      await loadQuestions();
+    } catch (error) {
+      console.error('Error adding question:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to add question');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -333,6 +363,194 @@ export function AIQuestionLibrary() {
           <p className="text-slate-600">No questions found matching your filters</p>
         </div>
       )}
+
+      {showAddModal && (
+        <AddQuestionModal
+          categories={categories.filter((c) => c !== 'all')}
+          difficulties={difficulties.filter((d) => d !== 'all')}
+          saving={saving}
+          error={saveError}
+          onCancel={() => {
+            setShowAddModal(false);
+            setSaveError(null);
+          }}
+          onSave={addQuestion}
+        />
+      )}
+    </div>
+  );
+}
+
+interface QuestionDraft {
+  category: string;
+  question: string;
+  expected_sql: string;
+  description: string;
+  difficulty: string;
+  views_used: string;
+  is_active: boolean;
+}
+
+interface AddQuestionModalProps {
+  categories: string[];
+  difficulties: string[];
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSave: (draft: QuestionDraft) => void;
+}
+
+function AddQuestionModal({
+  categories,
+  difficulties,
+  saving,
+  error,
+  onCancel,
+  onSave,
+}: AddQuestionModalProps) {
+  const [draft, setDraft] = useState<QuestionDraft>({
+    category: categories[0] ?? 'general',
+    question: '',
+    expected_sql: '',
+    description: '',
+    difficulty: 'medium',
+    views_used: '',
+    is_active: true,
+  });
+
+  const canSave =
+    draft.question.trim().length > 0 && draft.expected_sql.trim().length > 0 && !saving;
+
+  const update = (key: keyof QuestionDraft, value: string | boolean) =>
+    setDraft((prev) => ({ ...prev, [key]: value }));
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Add Question</h2>
+            <p className="text-sm text-slate-600">
+              Add a natural language question and the SQL the AI should produce for it
+            </p>
+          </div>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Category</label>
+              <select
+                value={draft.category}
+                onChange={(e) => update('category', e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Difficulty</label>
+              <select
+                value={draft.difficulty}
+                onChange={(e) => update('difficulty', e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                {difficulties.map((difficulty) => (
+                  <option key={difficulty} value={difficulty}>
+                    {difficulty}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-700 mb-1 block">Question</label>
+            <input
+              type="text"
+              value={draft.question}
+              onChange={(e) => update('question', e.target.value)}
+              placeholder="Which customers had the largest margin decline last quarter?"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-700 mb-1 block">Expected SQL</label>
+            <textarea
+              value={draft.expected_sql}
+              onChange={(e) => update('expected_sql', e.target.value)}
+              rows={6}
+              placeholder="SELECT ..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-700 mb-1 block">Description</label>
+            <input
+              type="text"
+              value={draft.description}
+              onChange={(e) => update('description', e.target.value)}
+              placeholder="What this question is testing"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-700 mb-1 block">
+              Views used <span className="text-slate-400">(comma separated)</span>
+            </label>
+            <input
+              type="text"
+              value={draft.views_used}
+              onChange={(e) => update('views_used', e.target.value)}
+              placeholder="v_customer_margin, v_quote_funnel"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+            />
+          </div>
+
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={draft.is_active}
+              onChange={(e) => update('is_active', e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-700">Include this question in testing</span>
+          </label>
+
+          {error && (
+            <div className="flex items-start space-x-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-end space-x-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(draft)}
+            disabled={!canSave}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving...' : 'Add Question'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

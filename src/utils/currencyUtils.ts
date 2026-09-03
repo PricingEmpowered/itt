@@ -1,4 +1,4 @@
-import { Currency, ExchangeRate } from '../types';
+import { Currency } from '../types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 

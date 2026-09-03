@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Quote, Customer } from '../types';
-import { CheckCircle, XCircle, Clock, AlertCircle, TrendingUp, Shield, Users, DollarSign, Percent, ChevronRight } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, TrendingUp, Shield, Users, DollarSign, Percent, ChevronRight } from 'lucide-react';
 
 interface ApprovalRequest {
   id: string;
@@ -49,7 +49,6 @@ export function Approvals() {
   const [approvalHistory, setApprovalHistory] = useState<{ [key: string]: ApprovalHistory[] }>({});
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
   const [filterLevel, setFilterLevel] = useState<number | 'all'>('all');
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
 
@@ -149,10 +148,6 @@ export function Approvals() {
   const canApprove = (approvalLevel: number): boolean => {
     if (!userProfile) return false;
     return userProfile.approval_level >= approvalLevel;
-  };
-
-  const getApprovalsByLevel = (level: number) => {
-    return approvals.filter(a => a.approval_level_required === level);
   };
 
   const handleApproval = async (approval: ApprovalRequest, approved: boolean) => {
@@ -420,7 +415,7 @@ export function Approvals() {
                     <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="text-sm font-semibold text-blue-900 mb-2">Approval Trail</div>
                       <div className="space-y-2">
-                        {history.map((h, idx) => (
+                        {history.map((h) => (
                           <div key={h.id} className="flex items-center gap-2 text-xs text-blue-700">
                             <CheckCircle size={12} />
                             <span className="font-medium">Level {h.approval_level}</span>

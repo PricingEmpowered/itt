@@ -23,15 +23,15 @@ export const StatCard = memo(function StatCard({ title, value, change, isPositiv
           <h3 className="text-4xl font-bold">{value}</h3>
         </div>
         <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm group-hover:bg-white/30 transition-colors">
-          <TrendingUp className="h-6 w-6" />
+          <Icon className="h-6 w-6" />
         </div>
       </div>
       <div className="flex items-center">
         <div className={`flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-          isPositive ? 'bg-red-500/90' : 'bg-red-500/90'
+          isPositive ? 'bg-emerald-500/90' : 'bg-red-500/90'
         }`}>
           {isPositive ? (
-            <ArrowDownRight className="h-3 w-3 mr-1" />
+            <ArrowUpRight className="h-3 w-3 mr-1" />
           ) : (
             <ArrowDownRight className="h-3 w-3 mr-1" />
           )}

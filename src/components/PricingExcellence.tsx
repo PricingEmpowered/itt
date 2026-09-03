@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Award, TrendingUp, CheckCircle, Target, AlertCircle, BarChart3, LineChart, Info, X, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Award, TrendingUp, CheckCircle, AlertCircle, BarChart3, LineChart, Info, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { DocumentUpload } from './DocumentUpload';
 import {

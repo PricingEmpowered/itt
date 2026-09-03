@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { TrendingUp, DollarSign, FileText, Users, Clock, Package, ShoppingCart, CheckCircle2, AlertCircle, TrendingDown, Award, XCircle, Percent, Target, BarChart3, Layers } from 'lucide-react';
+import { TrendingUp, DollarSign, FileText, Users, Clock, Package, ShoppingCart, CheckCircle2, AlertCircle, Award, XCircle, Percent, Target, BarChart3, Layers } from 'lucide-react';
 import { DealScoreIndicator } from './DealScoreIndicator';
 import { PricePerformanceChart } from './dashboard/PricePerformanceChart';
 import { MarginAnalysisChart } from './dashboard/MarginAnalysisChart';

@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  PriceSimulation as PriceSimulationType,
   SimulationResult,
   ProductFamily,
   Product,
   Customer,
-  Quote,
-  QuoteLine,
   Region,
   Industry,
 } from '../types';

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { PriceList, PriceListItem, Product, Currency, ExchangeRate } from '../types';
+import { PriceList, PriceListItem, Product, Currency } from '../types';
 import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Percent, Target, TrendingDown as TrendingDownIcon, TrendingUp as TrendingUpIcon, Calendar } from 'lucide-react';
 
 export function PriceLists() {

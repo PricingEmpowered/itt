@@ -425,7 +425,6 @@ interface CapturedScreenshot {
 export function MarketingReport() {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState('');
-  const [captureMode, setCaptureMode] = useState(false);
   const [screenshots, setScreenshots] = useState<Map<string, CapturedScreenshot>>(new Map());
   const [capturing, setCapturing] = useState(false);
 

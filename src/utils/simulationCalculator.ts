@@ -121,7 +121,6 @@ function calculateBestCase(
   const optimisticElasticity = current.priceElasticity * 0.5;
   const volumeImpact = priceChangePercent * optimisticElasticity;
 
-  const newVolume = current.totalVolume * (1 + volumeImpact / 100);
   const newRevenue = current.totalRevenue * (1 + priceChangePercent / 100) * (1 + volumeImpact / 100);
   const newMargin = newRevenue - (current.totalRevenue - current.totalMargin) * (1 + volumeImpact / 100);
 
@@ -167,7 +166,6 @@ function calculateMidCase(
 ): Omit<SimulationResult, 'id' | 'simulation_id' | 'created_at'> {
   const volumeImpact = priceChangePercent * current.priceElasticity;
 
-  const newVolume = current.totalVolume * (1 + volumeImpact / 100);
   const newRevenue = current.totalRevenue * (1 + priceChangePercent / 100) * (1 + volumeImpact / 100);
   const newMargin = newRevenue - (current.totalRevenue - current.totalMargin) * (1 + volumeImpact / 100);
 
@@ -216,7 +214,6 @@ function calculateWorstCase(
   const pessimisticElasticity = current.priceElasticity * 1.5;
   const volumeImpact = priceChangePercent * pessimisticElasticity;
 
-  const newVolume = current.totalVolume * (1 + volumeImpact / 100);
   const newRevenue = current.totalRevenue * (1 + priceChangePercent / 100) * (1 + volumeImpact / 100);
   const newMargin = newRevenue - (current.totalRevenue - current.totalMargin) * (1 + volumeImpact / 100);
 

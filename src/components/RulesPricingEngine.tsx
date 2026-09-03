@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Plus, Edit2, Eye, Calculator, AlertTriangle } from 'lucide-react';
+import { Settings, Calculator, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface PricingRule {

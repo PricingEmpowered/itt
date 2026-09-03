@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { DollarSign, FileText, TrendingUp, Users, BarChart3, Layers, ChevronDown, Camera } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Users, BarChart3, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from './LoadingSpinner';
 import { StatCard, MetricCard } from './dashboard/StatCard';
@@ -306,6 +306,8 @@ export function DashboardEnhanced() {
         onClose={closeDrillDown}
         metric={drillDownModal.metric || { title: '', value: '', badge: '', gradient: '' }}
       />
+
+      <DashboardFilters filters={filters} onFiltersChange={setFilters} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div ref={priceChartRef} className="bg-white rounded-lg shadow-sm border border-slate-200">

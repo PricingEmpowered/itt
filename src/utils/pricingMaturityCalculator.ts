@@ -83,7 +83,7 @@ export const calculateOverallMaturity = (assessments: MaturityAssessment[]): num
   return Math.round(totalScore / assessments.length);
 };
 
-export const getPillarRecommendations = (pillarName: string, score: number): string[] => {
+export const getPillarRecommendations = (pillarName: string, _score: number): string[] => {
   const recommendations: Record<string, string[]> = {
     'Documentation and Measurement': [
       'Implement automated discount tracking across all distributors',

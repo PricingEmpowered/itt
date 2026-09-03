@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Package, DollarSign, Target, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart3, Package, Target, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { QuantityBreaksDetailModal } from './QuantityBreaksDetailModal';
 
 interface ProductOrderingPattern {
