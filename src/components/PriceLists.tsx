@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { PriceList, PriceListItem, Product, Currency } from '../types';
 import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Percent, Target, TrendingDown as TrendingDownIcon, TrendingUp as TrendingUpIcon, Calendar } from 'lucide-react';
 
@@ -32,7 +32,7 @@ export function PriceLists() {
 
   const loadPriceLists = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('price_lists')
         .select('*')
         .order('created_at', { ascending: false });
@@ -51,7 +51,7 @@ export function PriceLists() {
 
   const loadCurrencies = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('currencies')
         .select('*')
         .eq('is_active', true)
@@ -85,7 +85,7 @@ export function PriceLists() {
             date: new Date().toISOString().split('T')[0],
           }));
 
-          await supabase.from('exchange_rates').upsert(ratesToSave, {
+          await db.from('exchange_rates').upsert(ratesToSave, {
             onConflict: 'from_currency,to_currency,date',
           });
         }
@@ -100,7 +100,7 @@ export function PriceLists() {
   const loadHistoricalExchangeRates = async () => {
     try {
       // Get last 12 months of rates
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('exchange_rates')
         .select('*')
         .eq('from_currency', 'USD')
@@ -136,7 +136,7 @@ export function PriceLists() {
 
   const loadPriceListItems = async (priceListId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('price_list_items')
         .select(`
           *,
@@ -156,7 +156,7 @@ export function PriceLists() {
     if (!confirm('Are you sure you want to delete this price list?')) return;
 
     try {
-      const { error } = await supabase.from('price_lists').delete().eq('id', id);
+      const { error } = await db.from('price_lists').delete().eq('id', id);
 
       if (error) throw error;
       loadPriceLists();
@@ -399,7 +399,7 @@ function BulkPriceActionsModal({ priceListId, onClose, onComplete }: BulkPriceAc
 
   const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('products')
         .select('category')
         .order('category');
@@ -416,7 +416,7 @@ function BulkPriceActionsModal({ priceListId, onClose, onComplete }: BulkPriceAc
     setCalculatingImpact(true);
 
     try {
-      let query = supabase
+      let query = db
         .from('price_list_items')
         .select('id, list_price, product_id, products!inner(category, base_cost)')
         .eq('price_list_id', priceListId);
@@ -487,7 +487,7 @@ function BulkPriceActionsModal({ priceListId, onClose, onComplete }: BulkPriceAc
     setProcessing(true);
 
     try {
-      let query = supabase
+      let query = db
         .from('price_list_items')
         .select('id, list_price, product_id, products!inner(category, base_cost)')
         .eq('price_list_id', priceListId);
@@ -532,7 +532,7 @@ function BulkPriceActionsModal({ priceListId, onClose, onComplete }: BulkPriceAc
       });
 
       for (const update of updates) {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await db
           .from('price_list_items')
           .update({ list_price: update.list_price })
           .eq('id', update.id);
@@ -760,13 +760,13 @@ function PriceListModal({ priceList, currencies, onClose, onSave }: PriceListMod
 
     try {
       if (priceList) {
-        const { error } = await supabase
+        const { error } = await db
           .from('price_lists')
           .update(formData)
           .eq('id', priceList.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('price_lists').insert([formData]);
+        const { error } = await db.from('price_lists').insert([formData]);
         if (error) throw error;
       }
       onSave();

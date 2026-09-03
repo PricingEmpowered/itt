@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { DealScoreDetails, QuoteLine, Product } from '../types';
 
 interface HistoricalDealData {
@@ -22,7 +22,7 @@ export async function calculateDealScore(
       return { score: null, details: null };
     }
 
-    const { data: customer } = await supabase
+    const { data: customer } = await db
       .from('customers')
       .select('industry_id, region_id')
       .eq('id', customerId)
@@ -50,7 +50,7 @@ export async function calculateDealScore(
       return { score: null, details: null };
     }
 
-    const { data: historicalQuotes, error } = await supabase
+    const { data: historicalQuotes, error } = await db
       .from('quote_lines')
       .select(
         `

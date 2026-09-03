@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Customer, Region, Industry } from '../types';
 import { Plus, Edit2, Trash2, Search, Filter, DollarSign, Settings } from 'lucide-react';
 import { PriceListModal, AttributesModal } from './CustomerModals';
@@ -32,7 +32,7 @@ export function Customers() {
 
   const loadCustomers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('customers')
         .select(`
           *,
@@ -84,8 +84,8 @@ export function Customers() {
   const loadHierarchies = async () => {
     try {
       const [regionsRes, industriesRes] = await Promise.all([
-        supabase.from('regions').select('*').order('name'),
-        supabase.from('industries').select('*').order('name')
+        db.from('regions').select('*').order('name'),
+        db.from('industries').select('*').order('name')
       ]);
       if (regionsRes.data) setRegions(regionsRes.data);
       if (industriesRes.data) setIndustries(industriesRes.data);
@@ -98,7 +98,7 @@ export function Customers() {
     if (!confirm('Are you sure you want to delete this customer?')) return;
 
     try {
-      const { error } = await supabase.from('customers').delete().eq('id', id);
+      const { error } = await db.from('customers').delete().eq('id', id);
 
       if (error) throw error;
       loadCustomers();
@@ -373,8 +373,8 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
   const loadHierarchies = async () => {
     try {
       const [regionsRes, industriesRes] = await Promise.all([
-        supabase.from('regions').select('*').order('name'),
-        supabase.from('industries').select('*').order('name')
+        db.from('regions').select('*').order('name'),
+        db.from('industries').select('*').order('name')
       ]);
       if (regionsRes.data) setRegions(regionsRes.data);
       if (industriesRes.data) setIndustries(industriesRes.data);
@@ -389,13 +389,13 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
 
     try {
       if (customer) {
-        const { error } = await supabase
+        const { error } = await db
           .from('customers')
           .update(formData)
           .eq('id', customer.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('customers').insert([formData]);
+        const { error } = await db.from('customers').insert([formData]);
         if (error) throw error;
       }
       onSave();

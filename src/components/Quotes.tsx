@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Quote, QuoteLine, Customer, Product, Region, Industry } from '../types';
 import { Eye, Trash2, Search, Filter, Printer, Clock } from 'lucide-react';
 import { generateQuotePDF } from '../utils/pdfGenerator';
@@ -36,7 +36,7 @@ export function Quotes() {
 
   const loadQuotes = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('quotes')
         .select(`
           *,
@@ -112,8 +112,8 @@ export function Quotes() {
   const loadHierarchies = async () => {
     try {
       const [regionsRes, industriesRes] = await Promise.all([
-        supabase.from('regions').select('*').order('name'),
-        supabase.from('industries').select('*').order('name')
+        db.from('regions').select('*').order('name'),
+        db.from('industries').select('*').order('name')
       ]);
       if (regionsRes.data) setRegions(regionsRes.data);
       if (industriesRes.data) setIndustries(industriesRes.data);
@@ -126,7 +126,7 @@ export function Quotes() {
     if (!confirm('Are you sure you want to delete this quote?')) return;
 
     try {
-      const { error } = await supabase.from('quotes').delete().eq('id', id);
+      const { error } = await db.from('quotes').delete().eq('id', id);
 
       if (error) throw error;
       loadQuotes();

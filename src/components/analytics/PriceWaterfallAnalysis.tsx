@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { db } from '../../lib/dataClient';
 import { LoadingSpinner } from '../LoadingSpinner';
 
 interface WaterfallData {
@@ -25,7 +25,7 @@ export function PriceWaterfallAnalysis() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: waterfallData, error } = await supabase
+      const { data: waterfallData, error } = await db
         .from('analytics_price_waterfall')
         .select('*')
         .is('product_family', null)

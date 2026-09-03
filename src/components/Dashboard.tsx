@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { TrendingUp, DollarSign, FileText, Users, Clock, Package, ShoppingCart, CheckCircle2, AlertCircle, Award, XCircle, Percent, Target, BarChart3, Layers } from 'lucide-react';
 import { DealScoreIndicator } from './DealScoreIndicator';
 import { PricePerformanceChart } from './dashboard/PricePerformanceChart';
@@ -65,7 +65,7 @@ export function Dashboard() {
 
   const loadDrillDown = async (status: string) => {
     try {
-      let query = supabase
+      let query = db
         .from('quotes')
         .select('*, customers(name)');
 
@@ -92,11 +92,11 @@ export function Dashboard() {
   const loadDashboardData = async () => {
     try {
       const [quotesRes, approvalsRes, productsRes, customersRes, quoteLinesRes] = await Promise.all([
-        supabase.from('quotes').select('*'),
-        supabase.from('approval_requests').select('*').eq('status', 'Pending'),
-        supabase.from('products').select('*').eq('status', 'Active'),
-        supabase.from('customers').select('*'),
-        supabase.from('quote_lines').select('discount_applied, unit_price, products(base_cost)'),
+        db.from('quotes').select('*'),
+        db.from('approval_requests').select('*').eq('status', 'Pending'),
+        db.from('products').select('*').eq('status', 'Active'),
+        db.from('customers').select('*'),
+        db.from('quote_lines').select('discount_applied, unit_price, products(base_cost)'),
       ]);
 
       const quotes = quotesRes.data || [];

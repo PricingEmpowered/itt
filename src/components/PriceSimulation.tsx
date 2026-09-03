@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import {
   SimulationResult,
   ProductFamily,
@@ -38,11 +38,11 @@ export function PriceSimulation() {
   const loadData = async () => {
     try {
       const [familiesRes, productsRes, customersRes, regionsRes, industriesRes] = await Promise.all([
-        supabase.from('product_families').select('*').order('name'),
-        supabase.from('products').select('*').eq('status', 'Active').order('name'),
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('regions').select('*').order('name'),
-        supabase.from('industries').select('*').order('name'),
+        db.from('product_families').select('*').order('name'),
+        db.from('products').select('*').eq('status', 'Active').order('name'),
+        db.from('customers').select('*').order('name'),
+        db.from('regions').select('*').order('name'),
+        db.from('industries').select('*').order('name'),
       ]);
 
       if (familiesRes.data) setProductFamilies(familiesRes.data);
@@ -154,8 +154,8 @@ export function PriceSimulation() {
       }
 
       const [quotesRes, quoteLinesRes] = await Promise.all([
-        supabase.from('quotes').select('*').eq('status', 'Approved'),
-        supabase.from('quote_lines').select('*'),
+        db.from('quotes').select('*').eq('status', 'Approved'),
+        db.from('quote_lines').select('*'),
       ]);
 
       const scenarios = calculateSimulationScenarios({
@@ -170,7 +170,7 @@ export function PriceSimulation() {
         },
       });
 
-      const { data: simulation, error: simError } = await supabase
+      const { data: simulation, error: simError } = await db
         .from('price_simulations')
         .insert({
           name: simulationName,
@@ -191,7 +191,7 @@ export function PriceSimulation() {
         ...scenario,
       }));
 
-      const { data: savedResults, error: resultsError } = await supabase
+      const { data: savedResults, error: resultsError } = await db
         .from('simulation_results')
         .insert(resultsToInsert)
         .select();

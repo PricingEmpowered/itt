@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle, Target, Users, Package, AlertCircle, Settings, Info } from 'lucide-react';
 
 interface SegmentMetrics {
@@ -66,7 +66,7 @@ export function DealScoreAnalytics() {
 
   const loadWeights = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('deal_score_config')
         .select('*')
         .maybeSingle();
@@ -96,7 +96,7 @@ export function DealScoreAnalytics() {
         return;
       }
 
-      const { error } = await supabase
+      const { error } = await db
         .from('deal_score_config')
         .upsert({
           id: 1,
@@ -122,7 +122,7 @@ export function DealScoreAnalytics() {
 
   const loadProductMetrics = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('deal_score_analysis_by_product_family')
         .select('*')
         .order('total_deals', { ascending: false });
@@ -136,7 +136,7 @@ export function DealScoreAnalytics() {
 
   const loadCustomerMetrics = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('deal_score_analysis_by_customer_segment')
         .select('*')
         .order('total_deals', { ascending: false });
@@ -150,7 +150,7 @@ export function DealScoreAnalytics() {
 
   const loadOverallStats = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('deal_outcomes')
         .select('outcome, was_escalated, deal_score_at_creation');
 
@@ -178,8 +178,8 @@ export function DealScoreAnalytics() {
 
   const generateRecommendations = async () => {
     try {
-      const productData = await supabase.from('deal_score_analysis_by_product_family').select('*');
-      const customerData = await supabase.from('deal_score_analysis_by_customer_segment').select('*');
+      const productData = await db.from('deal_score_analysis_by_product_family').select('*');
+      const customerData = await db.from('deal_score_analysis_by_customer_segment').select('*');
 
       const newRecommendations: any[] = [];
 
@@ -231,14 +231,14 @@ export function DealScoreAnalytics() {
       });
 
       for (const rec of newRecommendations) {
-        await supabase
+        await db
           .from('deal_score_recommendations')
           .upsert(rec, {
             onConflict: 'segment_type,segment_value,issue_type'
           });
       }
 
-      const { data: savedRecs } = await supabase
+      const { data: savedRecs } = await db
         .from('deal_score_recommendations')
         .select('*')
         .eq('status', 'active')
@@ -260,7 +260,7 @@ export function DealScoreAnalytics() {
         updateData.implemented_at = new Date().toISOString();
       }
 
-      await supabase
+      await db
         .from('deal_score_recommendations')
         .update(updateData)
         .eq('id', id);

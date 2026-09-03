@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 
 interface PriceGuidanceProps {
@@ -39,7 +39,7 @@ export function PriceGuidance({ productId, unitPrice, discount, customerId }: Pr
 
       let currentCustomerSegment = null;
       if (customerId) {
-        const { data: currentCustomer } = await supabase
+        const { data: currentCustomer } = await db
           .from('customers')
           .select('segment')
           .eq('id', customerId)
@@ -47,7 +47,7 @@ export function PriceGuidance({ productId, unitPrice, discount, customerId }: Pr
         currentCustomerSegment = currentCustomer?.segment;
       }
 
-      const { data: quoteLines, error: queryError } = await supabase
+      const { data: quoteLines, error: queryError } = await db
         .from('quote_lines')
         .select(`
           unit_price,

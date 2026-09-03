@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { getCurrentUser } from '../lib/currentUser';
+import { db } from '../lib/dataClient';
 import { Award, TrendingUp, CheckCircle, AlertCircle, BarChart3, LineChart, Info, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { DocumentUpload } from './DocumentUpload';
@@ -30,14 +31,14 @@ export function PricingExcellence() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: pillarsData, error: pillarsError } = await supabase
+      const { data: pillarsData, error: pillarsError } = await db
         .from('pricing_maturity_pillars')
         .select('*')
         .order('pillar_order');
 
       if (pillarsError) throw pillarsError;
 
-      const { data: assessmentsData, error: assessmentsError } = await supabase
+      const { data: assessmentsData, error: assessmentsError } = await db
         .from('pricing_maturity_assessments')
         .select('*')
         .order('assessment_date', { ascending: false })
@@ -81,9 +82,9 @@ export function PricingExcellence() {
       const score = calculatePillarScore(pillar.criteria, criteriaCompletion);
       const maturityLevel = getMaturityLevel(score);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getCurrentUser();
 
-      const { error } = await supabase
+      const { error } = await db
         .from('pricing_maturity_assessments')
         .insert({
           pillar_id: pillar.id,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Product, ProductFamily } from '../types';
 import { Plus, Edit2, Trash2, Filter, AlertTriangle } from 'lucide-react';
 
@@ -31,7 +31,7 @@ export function ProductCatalog() {
 
   const loadFamilies = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('product_families')
         .select('*')
         .order('name');
@@ -62,7 +62,7 @@ export function ProductCatalog() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('products')
         .select(`
           *,
@@ -72,7 +72,7 @@ export function ProductCatalog() {
 
       if (error) throw error;
 
-      const { data: alerts } = await supabase
+      const { data: alerts } = await db
         .from('price_change_alerts')
         .select('product_id, urgency');
 
@@ -97,7 +97,7 @@ export function ProductCatalog() {
     if (!confirm('Are you sure you want to delete this product?')) return;
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('products')
         .delete()
         .eq('id', id);
@@ -335,7 +335,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
 
   const loadFamilies = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('product_families')
         .select('*')
         .order('name');
@@ -352,13 +352,13 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
 
     try {
       if (product) {
-        const { error } = await supabase
+        const { error } = await db
           .from('products')
           .update(formData)
           .eq('id', product.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await db
           .from('products')
           .insert([formData]);
         if (error) throw error;

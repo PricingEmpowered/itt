@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { getCurrentUser } from '../lib/currentUser';
+import { trpcClient } from '../lib/trpcClient';
+import { db } from '../lib/dataClient';
 import { Product, Customer, PriceList, QuoteLine, ProductFamily, QuantityBreak, Currency, Service, QuoteService } from '../types';
 import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones, Calculator } from 'lucide-react';
 import { PriceGuidance } from './PriceGuidance';
@@ -118,21 +120,26 @@ export function QuoteBuilder() {
   const loadData = async () => {
     try {
       const [productsRes, servicesRes, customersRes, priceListsRes, currenciesRes, familiesRes, quantityBreaksRes] = await Promise.all([
-        supabase.from('products').select('*, family:product_families(id, name)').eq('status', 'Active'),
-        supabase.from('services').select('*, sla_tier:service_sla_tiers(*)').eq('is_active', true),
-        supabase.from('customers').select('*'),
-        supabase.from('price_lists').select('*'),
-        supabase.from('currencies').select('*').eq('is_active', true).order('code'),
-        supabase.from('product_families').select('*').order('name'),
-        supabase.from('quantity_breaks').select('*'),
+        // These two need their related row embedded, which the generic table
+        // API deliberately does not do; they have real endpoints instead.
+        trpcClient.reference.activeProductsWithFamily.query().then((data) => ({ data })),
+        trpcClient.reference.activeServicesWithSla.query().then((data) => ({ data })),
+        db.from('customers').select('*'),
+        db.from('price_lists').select('*'),
+        db.from('currencies').select('*').eq('is_active', true).order('code'),
+        db.from('product_families').select('*').order('name'),
+        db.from('quantity_breaks').select('*'),
       ]);
 
       if (productsRes.data) {
-        setProducts(productsRes.data);
-        setFilteredProducts(productsRes.data);
+        // The joined endpoints return untyped rows; their shape is asserted
+        // here rather than threading generics through the query layer.
+        const products = productsRes.data as unknown as (Product & { family?: ProductFamily })[];
+        setProducts(products);
+        setFilteredProducts(products);
       }
       if (servicesRes.data) {
-        setServices(servicesRes.data.map(s => ({
+        setServices((servicesRes.data as unknown as Service[]).map(s => ({
           ...s,
           features: s.features || []
         })));
@@ -358,7 +365,7 @@ export function QuoteBuilder() {
       const { subtotal, tax, total } = calculateTotals();
       const quoteId = `Q-${Date.now()}`;
 
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData } = await getCurrentUser();
       if (!userData.user) {
         alert('Please sign in to create quotes');
         return;
@@ -366,7 +373,7 @@ export function QuoteBuilder() {
 
       const scoreResult = await calculateDealScore(quoteLines, products, selectedCustomer);
 
-      const { error: quoteError } = await supabase.from('quotes').insert([
+      const { error: quoteError } = await db.from('quotes').insert([
         {
           id: quoteId,
           customer_id: selectedCustomer,
@@ -397,7 +404,7 @@ export function QuoteBuilder() {
           line_total: line.line_total,
         }));
 
-        const { error: linesError } = await supabase.from('quote_lines').insert(linesToInsert);
+        const { error: linesError } = await db.from('quote_lines').insert(linesToInsert);
         if (linesError) throw linesError;
       }
 
@@ -413,11 +420,11 @@ export function QuoteBuilder() {
           contract_term_months: line.contract_term_months,
         }));
 
-        const { error: servicesError } = await supabase.from('quote_services').insert(servicesToInsert);
+        const { error: servicesError } = await db.from('quote_services').insert(servicesToInsert);
         if (servicesError) throw servicesError;
       }
 
-      const { data: tiers } = await supabase.from('commission_tiers').select('*').eq('is_active', true);
+      const { data: tiers } = await db.from('commission_tiers').select('*').eq('is_active', true);
 
       if (tiers && tiers.length > 0) {
         const dealSize = total * exchangeRate;
@@ -438,7 +445,7 @@ export function QuoteBuilder() {
           const totalPercent = basePercent + bonusPercent;
           const commissionAmount = dealSize * (totalPercent / 100);
 
-          await supabase.from('sales_commissions').insert({
+          await db.from('sales_commissions').insert({
             quote_id: quoteId,
             sales_rep_id: userData.user.id,
             sales_rep_email: userData.user.email || 'unknown',

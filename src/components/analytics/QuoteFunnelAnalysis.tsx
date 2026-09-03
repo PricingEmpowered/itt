@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { db } from '../../lib/dataClient';
 import { LoadingSpinner } from '../LoadingSpinner';
 import { Clock } from 'lucide-react';
 
@@ -34,7 +34,7 @@ export function QuoteFunnelAnalysis() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: funnelData, error } = await supabase
+      const { data: funnelData, error } = await db
         .from('analytics_quote_funnel')
         .select('*')
         .is('region', null)
@@ -46,7 +46,7 @@ export function QuoteFunnelAnalysis() {
       if (error) throw error;
       setData(funnelData || []);
 
-      const { data: turnaroundData } = await supabase
+      const { data: turnaroundData } = await db
         .from('quote_turnaround_analytics')
         .select('turnaround_time_hours, turnaround_category');
 

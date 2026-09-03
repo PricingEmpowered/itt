@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Users as UsersIcon, Shield, Mail, Edit2 } from 'lucide-react';
 
 interface UserProfile {
@@ -28,7 +28,7 @@ export function Users() {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('user_profiles')
         .select('*')
         .order('created_at', { ascending: false });
@@ -277,7 +277,7 @@ function EditUserModal({ user, onClose, onSave }: EditUserModalProps) {
     setSaving(true);
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('user_profiles')
         .update({
           full_name: formData.full_name,

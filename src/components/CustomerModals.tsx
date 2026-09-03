@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Customer, PriceList, CustomerPriceList } from '../types';
 import { Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
@@ -21,8 +21,8 @@ export function PriceListModal({ customer, onClose }: PriceListModalProps) {
   const loadData = async () => {
     try {
       const [priceListsRes, assignedRes] = await Promise.all([
-        supabase.from('price_lists').select('*').order('name'),
-        supabase
+        db.from('price_lists').select('*').order('name'),
+        db
           .from('customer_price_lists')
           .select('*, price_list:price_lists(*)')
           .eq('customer_id', customer.id)
@@ -45,7 +45,7 @@ export function PriceListModal({ customer, onClose }: PriceListModalProps) {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('customer_price_lists')
         .insert([{
           customer_id: customer.id,
@@ -72,12 +72,12 @@ export function PriceListModal({ customer, onClose }: PriceListModalProps) {
 
   const handleSetDefault = async (id: number) => {
     try {
-      await supabase
+      await db
         .from('customer_price_lists')
         .update({ is_default: false })
         .eq('customer_id', customer.id);
 
-      const { error } = await supabase
+      const { error } = await db
         .from('customer_price_lists')
         .update({ is_default: true })
         .eq('id', id);
@@ -94,7 +94,7 @@ export function PriceListModal({ customer, onClose }: PriceListModalProps) {
     if (!confirm('Remove this price list assignment?')) return;
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('customer_price_lists')
         .delete()
         .eq('id', id);
@@ -117,12 +117,12 @@ export function PriceListModal({ customer, onClose }: PriceListModalProps) {
       if (!swapItem) return;
 
       // Swap priorities
-      await supabase
+      await db
         .from('customer_price_lists')
         .update({ priority: currentPriority })
         .eq('id', swapItem.id);
 
-      const { error } = await supabase
+      const { error } = await db
         .from('customer_price_lists')
         .update({ priority: newPriority })
         .eq('id', id);
@@ -288,7 +288,7 @@ export function AttributesModal({ customer, onClose, onSave }: AttributesModalPr
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('customers')
         .update({ attributes })
         .eq('id', customer.id);

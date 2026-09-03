@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { db } from '../../lib/dataClient';
 import { LoadingSpinner } from '../LoadingSpinner';
 import { TrendingUp, TrendingDown, DollarSign, FileText, Award, Users, ArrowRight } from 'lucide-react';
 import { CustomerPricePerformance } from './CustomerPricePerformance';
@@ -71,7 +71,7 @@ export function BusinessPerformance() {
   const loadData = async () => {
     setLoading(true);
     try {
-      let query = supabase
+      let query = db
         .from('analytics_business_performance')
         .select('*')
         .eq('period_type', 'month');

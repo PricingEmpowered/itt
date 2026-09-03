@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BookOpen, Play, Plus, Trash2, CheckCircle, AlertCircle, Filter, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 
 interface Question {
   id: string;
@@ -41,7 +42,7 @@ export function AIQuestionLibrary() {
 
   const loadQuestions = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('ai_analytics_questions')
         .select('*')
         .order('category', { ascending: true })
@@ -104,7 +105,7 @@ export function AIQuestionLibrary() {
     if (!confirm('Are you sure you want to delete this question?')) return;
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('ai_analytics_questions')
         .delete()
         .eq('id', id);
@@ -120,7 +121,7 @@ export function AIQuestionLibrary() {
     setSaving(true);
     setSaveError(null);
     try {
-      const { error } = await supabase.from('ai_analytics_questions').insert({
+      const { error } = await db.from('ai_analytics_questions').insert({
         category: draft.category,
         question: draft.question.trim(),
         expected_sql: draft.expected_sql.trim(),
@@ -146,7 +147,7 @@ export function AIQuestionLibrary() {
 
   const toggleActive = async (id: string, currentState: boolean) => {
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('ai_analytics_questions')
         .update({ is_active: !currentState })
         .eq('id', id);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Settings, Calculator, AlertTriangle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 
 interface PricingRule {
   id: string;
@@ -49,7 +49,7 @@ export function RulesPricingEngine() {
 
   const loadRules = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('pricing_rules_config')
         .select('*')
         .order('created_at', { ascending: false });
@@ -90,7 +90,7 @@ export function RulesPricingEngine() {
           return;
         }
 
-        const { data: multiplier, error } = await supabase
+        const { data: multiplier, error } = await db
           .from('pricing_multipliers')
           .select('*')
           .eq('rules_config_id', selectedRule)
@@ -124,7 +124,7 @@ export function RulesPricingEngine() {
           return;
         }
 
-        const { data: marginAdders, error } = await supabase
+        const { data: marginAdders, error } = await db
           .from('pricing_margin_adders')
           .select('*')
           .eq('rules_config_id', selectedRule)

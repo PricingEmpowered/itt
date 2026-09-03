@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { DollarSign, Award, CheckCircle, Clock, Banknote } from 'lucide-react';
 
 interface Commission {
@@ -52,7 +52,7 @@ export function Commissions() {
 
   const loadCommissions = async () => {
     try {
-      let query = supabase
+      let query = db
         .from('sales_commissions')
         .select('*')
         .order('created_at', { ascending: false });
@@ -76,7 +76,7 @@ export function Commissions() {
 
   const loadSummary = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('commission_summary_by_rep')
         .select('*')
         .order('total_won_revenue', { ascending: false });
@@ -90,7 +90,7 @@ export function Commissions() {
 
   const markAsWon = async (commissionId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('sales_commissions')
         .update({
           status: 'won',
@@ -107,7 +107,7 @@ export function Commissions() {
 
   const markAsPaid = async (commissionId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('sales_commissions')
         .update({
           status: 'paid',

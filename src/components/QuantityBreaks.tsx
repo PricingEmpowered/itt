@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { QuantityBreak, Product, PriceList, ProductFamily } from '../types';
 import { Plus, Trash2, X, Layers, Copy } from 'lucide-react';
 
@@ -43,10 +43,10 @@ export function QuantityBreaks() {
   const loadData = async () => {
     try {
       const [breaksRes, productsRes, priceListsRes, familiesRes] = await Promise.all([
-        supabase.from('quantity_breaks').select('*').order('product_id', { ascending: true }).order('min_quantity', { ascending: true }),
-        supabase.from('products').select('*').eq('status', 'Active').order('name'),
-        supabase.from('price_lists').select('*').order('name'),
-        supabase.from('product_families').select('*').order('name'),
+        db.from('quantity_breaks').select('*').order('product_id', { ascending: true }).order('min_quantity', { ascending: true }),
+        db.from('products').select('*').eq('status', 'Active').order('name'),
+        db.from('price_lists').select('*').order('name'),
+        db.from('product_families').select('*').order('name'),
       ]);
 
       setQuantityBreaks(breaksRes.data || []);
@@ -67,7 +67,7 @@ export function QuantityBreaks() {
     }
 
     try {
-      const { error } = await supabase.from('quantity_breaks').insert([
+      const { error } = await db.from('quantity_breaks').insert([
         {
           product_id: formData.product_id,
           price_list_id: formData.price_list_id || null,
@@ -94,7 +94,7 @@ export function QuantityBreaks() {
     if (!confirm('Are you sure you want to delete this quantity break?')) return;
 
     try {
-      const { error } = await supabase.from('quantity_breaks').delete().eq('id', id);
+      const { error } = await db.from('quantity_breaks').delete().eq('id', id);
       if (error) throw error;
       await loadData();
     } catch (error) {
@@ -126,7 +126,7 @@ export function QuantityBreaks() {
         }))
       );
 
-      const { error } = await supabase.from('quantity_breaks').insert(breaksToInsert);
+      const { error } = await db.from('quantity_breaks').insert(breaksToInsert);
       if (error) throw error;
 
       await loadData();

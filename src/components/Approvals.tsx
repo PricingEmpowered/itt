@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { getCurrentUser } from '../lib/currentUser';
+import { db } from '../lib/dataClient';
 import { Quote, Customer } from '../types';
 import { CheckCircle, XCircle, AlertCircle, TrendingUp, Shield, Users, DollarSign, Percent, ChevronRight } from 'lucide-react';
 
@@ -58,10 +59,10 @@ export function Approvals() {
 
   const loadData = async () => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData } = await getCurrentUser();
       if (!userData.user) return;
 
-      const { data: profileData, error: profileError } = await supabase
+      const { data: profileData, error: profileError } = await db
         .from('user_profiles')
         .select('*')
         .eq('id', userData.user.id)
@@ -81,7 +82,7 @@ export function Approvals() {
           active: true
         };
 
-        const { data: newProfile } = await supabase
+        const { data: newProfile } = await db
           .from('user_profiles')
           .insert(defaultProfile)
           .select()
@@ -92,7 +93,7 @@ export function Approvals() {
         setUserProfile(profileData);
       }
 
-      const { data: approvalsData } = await supabase
+      const { data: approvalsData } = await db
         .from('approval_requests')
         .select('*')
         .eq('status', 'Pending')
@@ -104,7 +105,7 @@ export function Approvals() {
       // Load quotes for the pending approvals
       let quotesData: any[] = [];
       if (quoteIds.length > 0) {
-        const { data: fetchedQuotes } = await supabase
+        const { data: fetchedQuotes } = await db
           .from('quotes')
           .select(`
             *,
@@ -114,7 +115,7 @@ export function Approvals() {
 
         quotesData = fetchedQuotes || [];
 
-        const { data: historyData } = await supabase
+        const { data: historyData } = await db
           .from('approval_history')
           .select('*')
           .in('quote_id', quoteIds)
@@ -152,7 +153,7 @@ export function Approvals() {
 
   const handleApproval = async (approval: ApprovalRequest, approved: boolean) => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData } = await getCurrentUser();
       if (!userData.user || !userProfile) {
         alert('Please sign in');
         return;
@@ -165,7 +166,7 @@ export function Approvals() {
 
       const comments = commentText[approval.id] || (approved ? 'Approved' : 'Rejected');
 
-      await supabase
+      await db
         .from('approval_requests')
         .update({
           status: approved ? 'Approved' : 'Rejected',
@@ -175,7 +176,7 @@ export function Approvals() {
         })
         .eq('id', approval.id);
 
-      await supabase.from('approval_history').insert({
+      await db.from('approval_history').insert({
         quote_id: approval.quote_id,
         approval_request_id: approval.id,
         approval_level: approval.approval_level_required,
@@ -196,7 +197,7 @@ export function Approvals() {
         );
 
         if (pendingApprovals.length === 0) {
-          await supabase
+          await db
             .from('quotes')
             .update({
               status: 'Approved',
@@ -204,13 +205,13 @@ export function Approvals() {
             })
             .eq('id', approval.quote_id);
         } else {
-          await supabase
+          await db
             .from('quotes')
             .update({ current_approval_level: approval.approval_level_required })
             .eq('id', approval.quote_id);
         }
       } else if (!approved) {
-        await supabase
+        await db
           .from('quotes')
           .update({ status: 'Rejected' })
           .eq('id', approval.quote_id);

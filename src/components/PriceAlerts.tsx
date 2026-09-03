@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { AlertTriangle, Plus, X, Check, Clock, TrendingUp, DollarSign, Calendar, Info, CheckSquare, Square } from 'lucide-react';
 
 interface PriceAlert {
@@ -57,7 +57,7 @@ export function PriceAlerts() {
 
   const loadAlerts = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('price_change_alerts')
         .select('*')
         .order('days_until_effective', { ascending: true });
@@ -71,7 +71,7 @@ export function PriceAlerts() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('products')
         .select('id, name, category, base_cost')
         .eq('status', 'active')
@@ -98,7 +98,7 @@ export function PriceAlerts() {
       const expectedNewCost = parseFloat(newCost);
       const costChangePercent = ((expectedNewCost - product.base_cost) / product.base_cost) * 100;
 
-      const { data: priceListItem } = await supabase
+      const { data: priceListItem } = await db
         .from('price_list_items')
         .select('list_price')
         .eq('product_id', selectedProduct)
@@ -112,7 +112,7 @@ export function PriceAlerts() {
         parseFloat(targetMargin)
       );
 
-      const { error } = await supabase
+      const { error } = await db
         .from('expected_cost_changes')
         .insert({
           product_id: selectedProduct,
@@ -147,7 +147,7 @@ export function PriceAlerts() {
         updates.price_updated_at = new Date().toISOString();
       }
 
-      const { error } = await supabase
+      const { error } = await db
         .from('expected_cost_changes')
         .update(updates)
         .eq('id', id);
@@ -209,18 +209,18 @@ export function PriceAlerts() {
           newPrice = alert.expected_new_cost + currentMarginDollars;
         }
 
-        await supabase
+        await db
           .from('price_list_items')
           .update({ list_price: newPrice })
           .eq('product_id', alert.product_id)
           .eq('price_list_id', 'master');
 
-        await supabase
+        await db
           .from('products')
           .update({ base_cost: alert.expected_new_cost })
           .eq('id', alert.product_id);
 
-        await supabase
+        await db
           .from('expected_cost_changes')
           .update({
             status: 'price_updated',

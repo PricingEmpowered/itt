@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { db } from '../../lib/dataClient';
 import { LoadingSpinner } from '../LoadingSpinner';
 
 interface PricePerformanceData {
@@ -25,7 +25,7 @@ export function ListPricePerformance() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: perfData, error } = await supabase
+      const { data: perfData, error } = await db
         .from('analytics_price_performance')
         .select('*')
         .order('sales', { ascending: false })

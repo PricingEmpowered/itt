@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { getCurrentUser } from '../lib/currentUser';
 import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Upload, File, Trash2, Download, X } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -43,7 +45,7 @@ export function DocumentUpload() {
   const loadDocuments = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('pricing_documents')
         .select('*')
         .order('created_at', { ascending: false });
@@ -74,7 +76,7 @@ export function DocumentUpload() {
 
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getCurrentUser();
       if (!user) throw new Error('Not authenticated');
 
       const fileExt = selectedFile.name.split('.').pop();
@@ -86,7 +88,7 @@ export function DocumentUpload() {
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase
+      const { error: dbError } = await db
         .from('pricing_documents')
         .insert({
           file_name: selectedFile.name,
@@ -145,7 +147,7 @@ export function DocumentUpload() {
 
       if (storageError) throw storageError;
 
-      const { error: dbError } = await supabase
+      const { error: dbError } = await db
         .from('pricing_documents')
         .delete()
         .eq('id', doc.id);

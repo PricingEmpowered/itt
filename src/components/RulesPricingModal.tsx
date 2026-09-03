@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Calculator, AlertTriangle, CheckCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 
 interface PricingRule {
   id: string;
@@ -65,7 +65,7 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
 
   const loadRules = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('pricing_rules_config')
         .select('*')
         .eq('is_active', true)
@@ -85,7 +85,7 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('products')
         .select('id, name, base_cost, category')
         .order('name');
@@ -120,7 +120,7 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
           return;
         }
 
-        const { data: multiplier, error } = await supabase
+        const { data: multiplier, error } = await db
           .from('pricing_multipliers')
           .select('*')
           .eq('rules_config_id', selectedRule)
@@ -161,7 +161,7 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
           return;
         }
 
-        const { data: marginAdders, error } = await supabase
+        const { data: marginAdders, error } = await db
           .from('pricing_margin_adders')
           .select('*')
           .eq('rules_config_id', selectedRule)

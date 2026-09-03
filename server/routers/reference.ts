@@ -19,6 +19,42 @@ function listAll(table: string, orderBy: string) {
 }
 
 export const referenceRouter = router({
+  /**
+   * Active products with their family embedded, replacing the Supabase
+   * select `*, family:product_families(id, name)`. The generic data router
+   * has no embedded-select support by design, so joins live in real
+   * endpoints like this one.
+   */
+  activeProductsWithFamily: protectedProcedure.query(({ ctx }) =>
+    ctx.withDb(async (db) => {
+      const { rows } = await db.query(
+        `SELECT p.*,
+                CASE WHEN f.id IS NULL THEN NULL
+                     ELSE jsonb_build_object('id', f.id, 'name', f.name)
+                END AS family
+           FROM products p
+           LEFT JOIN product_families f ON f.id = p.family_id
+          WHERE p.status = 'Active'
+          ORDER BY p.name`
+      );
+      return rows;
+    })
+  ),
+
+  /** Active services with their SLA tier embedded (`*, sla_tier:service_sla_tiers(*)`). */
+  activeServicesWithSla: protectedProcedure.query(({ ctx }) =>
+    ctx.withDb(async (db) => {
+      const { rows } = await db.query(
+        `SELECT s.*, to_jsonb(t.*) AS sla_tier
+           FROM services s
+           LEFT JOIN service_sla_tiers t ON t.id = s.sla_tier_id
+          WHERE s.is_active
+          ORDER BY s.name`
+      );
+      return rows;
+    })
+  ),
+
   products: listAll('products', 'name'),
   services: listAll('services', 'name'),
   customers: listAll('customers', 'name'),

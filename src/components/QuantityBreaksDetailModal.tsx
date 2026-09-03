@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, TrendingUp, AlertCircle, CheckCircle, Target, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, Area } from 'recharts';
 
 interface ProductOrderingPattern {
@@ -137,7 +138,7 @@ export function QuantityBreaksDetailModal({ product, onClose }: Props) {
   };
 
   const loadCurrentBreaks = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('quantity_breaks')
       .select('min_quantity, max_quantity, discount_percent')
       .eq('product_id', product.product_id)
@@ -147,7 +148,7 @@ export function QuantityBreaksDetailModal({ product, onClose }: Props) {
     if (error) throw error;
 
     const breaksWithUsage = await Promise.all((data || []).map(async (brk) => {
-      const { count } = await supabase
+      const { count } = await db
         .from('quote_lines')
         .select('*', { count: 'exact', head: true })
         .eq('product_id', product.product_id)

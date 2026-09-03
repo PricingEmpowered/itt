@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 import { Clock, Calendar, Shield, Plus, Edit2, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface SLATier {
@@ -57,7 +57,7 @@ export function Services() {
 
   const loadServices = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('services')
         .select(`
           *,
@@ -77,7 +77,7 @@ export function Services() {
 
   const loadSLATiers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('service_sla_tiers')
         .select('*')
         .eq('is_active', true)
@@ -112,13 +112,13 @@ export function Services() {
 
     try {
       if (editingService) {
-        await supabase
+        await db
           .from('services')
           .update(serviceData)
           .eq('id', editingService.id);
       } else {
         const id = `SVC-${Date.now()}`;
-        await supabase
+        await db
           .from('services')
           .insert({ ...serviceData, id });
       }
@@ -134,7 +134,7 @@ export function Services() {
     if (!confirm('Are you sure you want to delete this service?')) return;
 
     try {
-      await supabase
+      await db
         .from('services')
         .delete()
         .eq('id', id);

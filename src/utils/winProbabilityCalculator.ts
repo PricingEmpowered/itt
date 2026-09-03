@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/dataClient';
 
 interface WinProbabilityResult {
   probability: number;
@@ -86,7 +86,7 @@ export async function calculateWinProbability(
 }
 
 async function getCustomerWinRate(customerId: string): Promise<{ rate: number; totalQuotes: number }> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('quotes')
     .select('status')
     .eq('customer_id', customerId)
@@ -110,7 +110,7 @@ async function getProductWinRates(productIds: string[]): Promise<{ averageRate: 
     return { averageRate: 0.5, totalQuotes: 0 };
   }
 
-  const { data: quoteLines, error } = await supabase
+  const { data: quoteLines, error } = await db
     .from('quote_lines')
     .select('quote_id, product_id')
     .in('product_id', productIds);
@@ -121,7 +121,7 @@ async function getProductWinRates(productIds: string[]): Promise<{ averageRate: 
 
   const quoteIds = [...new Set(quoteLines.map(ql => ql.quote_id))];
 
-  const { data: quotes } = await supabase
+  const { data: quotes } = await db
     .from('quotes')
     .select('id, status')
     .in('id', quoteIds)
@@ -141,7 +141,7 @@ async function getProductWinRates(productIds: string[]): Promise<{ averageRate: 
 }
 
 async function getDiscountBasedWinRate(discount: number): Promise<{ rate: number }> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('quote_lines')
     .select('quote_id, discount_percent, quotes!inner(status)')
     .in('quotes.status', ['Approved', 'Rejected'])
@@ -165,7 +165,7 @@ async function getQuoteSizeWinRate(quoteTotal: number): Promise<{ rate: number }
   const lowerBound = quoteTotal * (1 - rangePercent);
   const upperBound = quoteTotal * (1 + rangePercent);
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('quotes')
     .select('status, total')
     .in('status', ['Approved', 'Rejected'])
