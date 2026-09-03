@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { DollarSign, FileText, TrendingUp, Users, BarChart3, Camera } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { trpc } from '../lib/trpc';
 import { LoadingSpinner } from './LoadingSpinner';
 import { StatCard, MetricCard } from './dashboard/StatCard';
 import { DashboardFilters } from './dashboard/DashboardFilters';
@@ -33,6 +33,17 @@ const metricsData = [
   { title: 'Avg Change in Price Variance', value: '4.2M/yr', badge: '+3.20%', gradient: 'bg-gradient-to-br from-slate-500 to-slate-600', number: '13' },
 ];
 
+const EMPTY_METRICS: DashboardMetrics = {
+  revenue_12m: 0,
+  revenue_prev_12m: 0,
+  active_quotes_12m: 0,
+  active_quotes_prev_12m: 0,
+  win_rate_12m: 0,
+  win_rate_prev_12m: 0,
+  active_customers_12m: 0,
+  active_customers_prev_12m: 0,
+};
+
 export function DashboardEnhanced() {
   const [filters, setFilters] = useState({
     productFamily: 'all',
@@ -46,75 +57,25 @@ export function DashboardEnhanced() {
     metric: any;
   }>({ isOpen: false, metric: null });
 
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const statsRef = useRef<HTMLDivElement>(null);
   const metricsRef = useRef<HTMLDivElement>(null);
   const priceChartRef = useRef<HTMLDivElement>(null);
   const marginChartRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    loadMetrics();
-  }, []);
+  const metricsQuery = trpc.dashboard.metrics.useQuery();
 
-  const loadMetrics = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { data, error: rpcError } = await supabase.rpc('get_dashboard_metrics');
-
-      if (rpcError) {
-        console.error('RPC Error:', rpcError);
-        setError(rpcError.message);
-        // Set default metrics if there's an error
-        setMetrics({
-          revenue_12m: 0,
-          revenue_prev_12m: 0,
-          active_quotes_12m: 0,
-          active_quotes_prev_12m: 0,
-          win_rate_12m: 0,
-          win_rate_prev_12m: 0,
-          active_customers_12m: 0,
-          active_customers_prev_12m: 0,
-        });
-        return;
-      }
-
-      if (data) {
-        setMetrics(data as DashboardMetrics);
-      } else {
-        // Set default metrics if no data
-        setMetrics({
-          revenue_12m: 0,
-          revenue_prev_12m: 0,
-          active_quotes_12m: 0,
-          active_quotes_prev_12m: 0,
-          win_rate_12m: 0,
-          win_rate_prev_12m: 0,
-          active_customers_12m: 0,
-          active_customers_prev_12m: 0,
-        });
-      }
-    } catch (err) {
-      console.error('Error loading metrics:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load metrics');
-      // Set default metrics on error
-      setMetrics({
-        revenue_12m: 0,
-        revenue_prev_12m: 0,
-        active_quotes_12m: 0,
-        active_quotes_prev_12m: 0,
-        win_rate_12m: 0,
-        win_rate_prev_12m: 0,
-        active_customers_12m: 0,
-        active_customers_prev_12m: 0,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  /*
+   * The dashboard renders zeroes rather than nothing when metrics are
+   * unavailable, so a reporting failure does not blank the landing page. The
+   * error is surfaced separately below.
+   */
+  const metrics: DashboardMetrics | null = metricsQuery.data
+    ? (metricsQuery.data as unknown as DashboardMetrics)
+    : metricsQuery.isError
+      ? EMPTY_METRICS
+      : null;
+  const loading = metricsQuery.isLoading;
+  const error = metricsQuery.error?.message ?? null;
 
   const formatCurrency = useCallback((value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -225,7 +186,7 @@ export function DashboardEnhanced() {
           <p className="text-slate-600 text-lg mb-4">Failed to load dashboard metrics</p>
           {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
           <button
-            onClick={loadMetrics}
+            onClick={() => metricsQuery.refetch()}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Retry
@@ -237,31 +198,13 @@ export function DashboardEnhanced() {
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-      <div className="flex items-center justify-end gap-3 mb-4">
-        <select className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option>Year over Year</option>
-          <option>Month over Month</option>
-          <option>Quarter over Quarter</option>
-        </select>
-        <select className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option>All Product Families</option>
-          <option>Valves</option>
-          <option>Pumps</option>
-          <option>Accessories</option>
-          <option>Flow Control</option>
-          <option>Controls & Automation</option>
-        </select>
-        <select className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option>All Regions</option>
-          <option>North America</option>
-          <option>EMEA</option>
-        </select>
-        <select className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option>All Channels</option>
-          <option>Direct</option>
-          <option>Partner</option>
-        </select>
-      </div>
+      {/*
+        This position previously held four hardcoded <select> elements with no
+        value or onChange -- they listed options but controlled nothing. The
+        real filter control lives here now, so the dashboard has one filter bar
+        that actually drives the charts below.
+      */}
+      <DashboardFilters filters={filters} onFiltersChange={setFilters} />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -306,8 +249,6 @@ export function DashboardEnhanced() {
         onClose={closeDrillDown}
         metric={drillDownModal.metric || { title: '', value: '', badge: '', gradient: '' }}
       />
-
-      <DashboardFilters filters={filters} onFiltersChange={setFilters} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div ref={priceChartRef} className="bg-white rounded-lg shadow-sm border border-slate-200">

@@ -1,5 +1,6 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { supabase } from './lib/supabase';
+import { useState, lazy, Suspense } from 'react';
+import { trpc } from './lib/trpc';
+import { queryClient } from './lib/trpcClient';
 import { Auth } from './components/Auth';
 import { DashboardEnhanced } from './components/DashboardEnhanced';
 import { NavigationMenu } from './components/NavigationMenu';
@@ -31,31 +32,27 @@ const MarketingReport = lazy(() => import('./components/MarketingReport').then(m
 type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'rules-pricing' | 'marketing-report';
 
 function App() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<View>('dashboard');
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+  /*
+   * The session lives in an httpOnly cookie, so the client cannot read it
+   * directly and asks the server instead. This query is the single source of
+   * truth for whether anyone is signed in.
+   */
+  const { data: user, isLoading: loading, refetch: refetchUser } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+  });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setUser(session?.user ?? null);
-      })();
-    });
+  const signOut = trpc.auth.signOut.useMutation({
+    onSettled: () => {
+      // Drop every cached query so one user's data cannot be read from the
+      // cache after a different user signs in on the same browser.
+      queryClient.clear();
+      refetchUser();
+    },
+  });
 
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-  };
+  const handleSignOut = () => signOut.mutate();
 
   if (loading) {
     return (
@@ -66,7 +63,7 @@ function App() {
   }
 
   if (!user) {
-    return <Auth onAuthSuccess={() => {}} />;
+    return <Auth onAuthSuccess={() => refetchUser()} />;
   }
 
   return (
@@ -84,9 +81,11 @@ function App() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black text-sm font-semibold">
-                  {user.email?.charAt(0).toUpperCase()}
+                  {(user.fullName || user.email).charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm text-slate-200 font-medium">{user.email}</span>
+                <span className="text-sm text-slate-200 font-medium">
+                  {user.fullName || user.email}
+                </span>
               </div>
               <button
                 onClick={handleSignOut}

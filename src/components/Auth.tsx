@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { trpc } from '../lib/trpc';
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -9,38 +9,20 @@ interface AuthProps {
 export function Auth({ onAuthSuccess }: AuthProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  const signIn = trpc.auth.signIn.useMutation({
+    onSuccess: () => onAuthSuccess(),
+    onError: (err) => setError(err.message || 'Unable to sign in'),
+  });
 
-    try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
-        alert('Account created successfully! Please sign in.');
-        setIsSignUp(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        onAuthSuccess();
-      }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    signIn.mutate({ email, password });
   };
+
+  const loading = signIn.isPending;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-black to-slate-800 flex items-center justify-center p-4 relative overflow-hidden">
@@ -56,12 +38,8 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         </div>
 
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            {isSignUp ? 'Create Account' : 'Welcome Back'}
-          </h2>
-          <p className="text-slate-600">
-            {isSignUp ? 'Join thousands of sales teams' : 'Sign in to your account'}
-          </p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome Back</h2>
+          <p className="text-slate-600">Sign in to your account</p>
         </div>
 
         {error && (
@@ -111,44 +89,21 @@ export function Auth({ onAuthSuccess }: AuthProps) {
             className="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-black py-3.5 rounded-xl font-semibold hover:from-yellow-500 hover:to-yellow-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
             {loading ? (
-              'Processing...'
+              'Signing in...'
             ) : (
               <>
-                {isSignUp ? 'Create Account' : 'Sign In'}
+                Sign In
                 <ArrowRight size={18} />
               </>
             )}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-sm text-slate-600 hover:text-yellow-600 transition-colors font-medium"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
+        <div className="mt-8 pt-6 border-t border-slate-200">
+          <p className="text-xs text-slate-500 text-center">
+            Accounts are issued by your administrator.
+          </p>
         </div>
-
-        {!isSignUp && (
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <p className="text-xs text-slate-500 text-center mb-3">Demo Account</p>
-            <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">Email:</span>
-                <code className="bg-white px-3 py-1 rounded-lg text-yellow-600 font-mono text-xs">
-                  test@itt.com
-                </code>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">Password:</span>
-                <code className="bg-white px-3 py-1 rounded-lg text-yellow-600 font-mono text-xs">
-                  testpass123
-                </code>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
