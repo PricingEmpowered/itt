@@ -1,12 +1,10 @@
 import { Currency } from '../types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-
 export async function fetchExchangeRates(baseCurrency: string = 'USD', targetCurrencies?: string[]): Promise<Record<string, number>> {
   try {
-    const apiUrl = `${SUPABASE_URL}/functions/v1/currency-rates?base=${baseCurrency}${targetCurrencies ? `&symbols=${targetCurrencies.join(',')}` : ''}`;
+    const apiUrl = `/api/currency-rates?base=${baseCurrency}${targetCurrencies ? `&symbols=${targetCurrencies.join(',')}` : ''}`;
 
-    const response = await fetch(apiUrl);
+    const response = await fetch(apiUrl, { credentials: 'include' });
 
     if (!response.ok) {
       throw new Error('Failed to fetch exchange rates');

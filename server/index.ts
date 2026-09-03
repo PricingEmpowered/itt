@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 import express from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { registerAiAnalyticsRoutes } from './aiAnalytics.js';
+import { registerCurrencyRoutes } from './currencyRates.js';
 import { closePool, pool } from './db.js';
 import { registerDocumentRoutes } from './documents.js';
 import { ENV } from './env.js';
@@ -43,6 +44,7 @@ async function main() {
 
   registerDocumentRoutes(app);
   registerAiAnalyticsRoutes(app);
+  registerCurrencyRoutes(app);
 
   app.use(
     '/api/trpc',

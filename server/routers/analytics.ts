@@ -75,30 +75,46 @@ const BREAK_EFFECTIVENESS = `
    ORDER BY product_name, min_quantity
 `;
 
+/*
+ * The bucket label is assigned in a subquery rather than in the outer
+ * SELECT. PostgreSQL resolves names inside an ORDER BY *expression* against
+ * input columns, not output aliases, so the original
+ * `ORDER BY CASE quantity_range WHEN ...` failed with
+ * `column "quantity_range" does not exist`. Bucketing first makes the label
+ * a real column that GROUP BY and ORDER BY can both use.
+ */
 const QUANTITY_DISTRIBUTION = `
-  SELECT CASE
-           WHEN quantity <= 5 THEN '1-5'
-           WHEN quantity <= 10 THEN '6-10'
-           WHEN quantity <= 20 THEN '11-20'
-           WHEN quantity <= 50 THEN '21-50'
-           WHEN quantity <= 100 THEN '51-100'
-           ELSE '100+'
-         END AS quantity_range,
+  WITH bucketed AS (
+    SELECT CASE
+             WHEN ql.quantity <= 5 THEN '1-5'
+             WHEN ql.quantity <= 10 THEN '6-10'
+             WHEN ql.quantity <= 20 THEN '11-20'
+             WHEN ql.quantity <= 50 THEN '21-50'
+             WHEN ql.quantity <= 100 THEN '51-100'
+             ELSE '100+'
+           END AS quantity_range,
+           CASE
+             WHEN ql.quantity <= 5 THEN 1
+             WHEN ql.quantity <= 10 THEN 2
+             WHEN ql.quantity <= 20 THEN 3
+             WHEN ql.quantity <= 50 THEN 4
+             WHEN ql.quantity <= 100 THEN 5
+             ELSE 6
+           END AS bucket_order,
+           ql.quantity,
+           ql.unit_price,
+           COALESCE(ql.discount_applied, 0) AS discount_applied
+      FROM quote_lines ql
+      JOIN quotes q ON q.id = ql.quote_id
+     WHERE q.status <> 'Cancelled'
+  )
+  SELECT quantity_range,
          COUNT(*) AS order_count,
-         SUM(quantity * unit_price * (1 - COALESCE(discount_applied, 0) / 100)) AS total_revenue,
-         AVG(COALESCE(discount_applied, 0)) AS avg_discount
-    FROM quote_lines ql
-    JOIN quotes q ON q.id = ql.quote_id
-   WHERE q.status <> 'Cancelled'
-   GROUP BY quantity_range
-   ORDER BY CASE quantity_range
-              WHEN '1-5' THEN 1
-              WHEN '6-10' THEN 2
-              WHEN '11-20' THEN 3
-              WHEN '21-50' THEN 4
-              WHEN '51-100' THEN 5
-              WHEN '100+' THEN 6
-            END
+         SUM(quantity * unit_price * (1 - discount_applied / 100)) AS total_revenue,
+         AVG(discount_applied) AS avg_discount
+    FROM bucketed
+   GROUP BY quantity_range, bucket_order
+   ORDER BY bucket_order
 `;
 
 /** $1 is the product id, bound rather than interpolated. */

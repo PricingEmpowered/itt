@@ -68,15 +68,17 @@ response time does not reveal which emails exist.
 
 ## Not done yet
 
-- **Writes.** Only reads are exposed so far (`reference.*`, `quotes.*`,
-  `dashboard.metrics`). Quote creation, approvals, price-list edits and the
-  rest of the mutating paths still need endpoints.
-- **The frontend still calls Supabase.** 68 call sites across 39 files, plus
-  `src/hooks/` (five hooks that are entirely dead code — nothing imports
-  them, and `useQuotes` selects five columns that do not exist in the schema).
-- **Documents.** `DocumentUpload.tsx` uses Supabase Storage. Bytes should go
-  to `DOCUMENT_ROOT` on disk, with `pricing_documents` keeping the metadata.
-- **Two Edge Functions** (`currency-rates`, `ai-analytics`) are Deno and
-  unported. Note that on an air-gapped server neither outbound exchange-rate
-  lookups nor an LLM API will be reachable, so both need a decision rather
-  than a port.
+- **Typed write endpoints.** Writes currently go through the allowlisted
+  `data` router, which mirrors what the frontend had under Supabase but
+  enforces no business rules. Quote submission, approvals and price-list
+  changes deserve real procedures that validate state transitions.
+- **`src/lib/dataClient.ts` is a compatibility layer.** It reproduces the
+  PostgREST-shaped API the components were written against so they could move
+  off Supabase without being rewritten. Call sites should migrate onto the
+  feature routers (`trpc.quotes`, `trpc.reference`, `trpc.analytics`) over
+  time, and this file should shrink.
+- **Exchange rates are whatever is loaded.** `server/currencyRates.ts` reads
+  the `exchange_rates` table; nothing fetches rates automatically, since an
+  air-gapped server cannot. Rates need to be imported or entered.
+- **Ask AI is off.** See `server/aiAnalytics.ts` for the two things that must
+  be resolved before it can be enabled.

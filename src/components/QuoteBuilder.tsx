@@ -81,10 +81,8 @@ export function QuoteBuilder() {
         setExchangeRate(1.0);
         return;
       }
-
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/currency-rates?base=${priceList.currency}&symbols=${quoteCurrency.code}`
+        `/api/currency-rates?base=${priceList.currency}&symbols=${quoteCurrency.code}`
       );
 
       if (response.ok) {

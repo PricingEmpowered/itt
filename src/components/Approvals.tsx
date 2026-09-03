@@ -62,36 +62,21 @@ export function Approvals() {
       const { data: userData } = await getCurrentUser();
       if (!userData.user) return;
 
-      const { data: profileData, error: profileError } = await db
+      const { data: profileData } = await db
         .from('user_profiles')
         .select('*')
         .eq('id', userData.user.id)
         .maybeSingle();
 
-      if (!profileData && !profileError) {
-        // Create default profile if it doesn't exist
-        const defaultProfile = {
-          id: userData.user.id,
-          email: userData.user.email || '',
-          full_name: userData.user.email?.split('@')[0] || 'User',
-          role: 'Sales Manager',
-          approval_level: 1,
-          max_discount_approval: 15,
-          max_quote_size: 100000,
-          min_margin_percent: 20,
-          active: true
-        };
-
-        const { data: newProfile } = await db
-          .from('user_profiles')
-          .insert(defaultProfile)
-          .select()
-          .single();
-
-        setUserProfile(newProfile);
-      } else {
-        setUserProfile(profileData);
-      }
+      /*
+       * A missing profile is reported, not created here. The INSERT policy on
+       * user_profiles only admits admins, where "admin" means already having
+       * a profile row with role 'admin' -- so this insert could never succeed
+       * for the very users that needed it, and only produced a failed write.
+       * Profiles are provisioned alongside the account by `npm run
+       * create-user`.
+       */
+      setUserProfile(profileData ?? null);
 
       const { data: approvalsData } = await db
         .from('approval_requests')

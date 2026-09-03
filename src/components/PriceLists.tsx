@@ -67,27 +67,20 @@ export function PriceLists() {
   const loadCurrentExchangeRates = async () => {
     try {
       setLoadingRates(true);
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/currency-rates?base=USD&symbols=EUR,GBP,CAD,AUD,JPY,CNY`
+        `/api/currency-rates?base=USD&symbols=EUR,GBP,CAD,AUD,JPY,CNY`
       );
 
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
           setCurrentRates(data.rates);
-
-          // Save to database for historical tracking
-          const ratesToSave = Object.entries(data.rates).map(([currency, rate]) => ({
-            from_currency: 'USD',
-            to_currency: currency,
-            rate: rate as number,
-            date: new Date().toISOString().split('T')[0],
-          }));
-
-          await db.from('exchange_rates').upsert(ratesToSave, {
-            onConflict: 'from_currency,to_currency,date',
-          });
+          /*
+           * The rates previously fetched from an external API were written
+           * back here for history. They now come from the exchange_rates
+           * table itself, so saving them again would just rewrite what was
+           * read -- and with an empty table it attempted a zero-row upsert.
+           */
         }
       }
     } catch (error) {
