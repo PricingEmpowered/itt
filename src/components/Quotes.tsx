@@ -4,6 +4,7 @@ import { Quote, QuoteLine, Customer, Product, Region, Industry } from '../types'
 import { Eye, Trash2, Search, Filter, Printer, Clock } from 'lucide-react';
 import { generateQuotePDF } from '../utils/pdfGenerator';
 import { DealScoreIndicator, DealScoreCard } from './DealScoreIndicator';
+import { formatCurrency } from '../utils/format';
 
 interface QuoteWithDetails extends Quote {
   customer?: Customer & { regionData?: Region; industryData?: Industry };
@@ -340,7 +341,7 @@ export function Quotes() {
                   {quote.lines?.length || 0} items
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                  ${quote.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(quote.total)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <DealScoreIndicator score={quote.deal_score} size="small" />
@@ -488,7 +489,7 @@ function QuoteDetailModal({ quote, onClose }: QuoteDetailModalProps) {
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Subtotal:</span>
                   <span className="text-sm font-medium text-gray-900">
-                    ${quote.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatCurrency(quote.subtotal)}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -500,7 +501,7 @@ function QuoteDetailModal({ quote, onClose }: QuoteDetailModalProps) {
                 <div className="flex justify-between pt-2 border-t border-gray-200">
                   <span className="text-base font-semibold text-gray-900">Total:</span>
                   <span className="text-base font-bold text-gray-900">
-                    ${quote.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatCurrency(quote.total)}
                   </span>
                 </div>
                 <div className="pt-2 border-t border-gray-200">
@@ -586,7 +587,7 @@ function QuoteDetailModal({ quote, onClose }: QuoteDetailModalProps) {
                           {line.quantity}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                          ${typeof line.unit_price === 'number' ? line.unit_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(line.unit_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {formatCurrency(line.unit_price)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 text-right">
                           {typeof line.discount_applied === 'number' ? line.discount_applied.toFixed(2) : parseFloat(line.discount_applied).toFixed(2)}%

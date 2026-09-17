@@ -3,6 +3,7 @@ import { db } from '../lib/dataClient';
 import { Customer, Region, Industry } from '../types';
 import { Plus, Edit2, Trash2, Search, Filter, DollarSign, Settings } from 'lucide-react';
 import { PriceListModal, AttributesModal } from './CustomerModals';
+import { formatCurrency } from '../utils/format';
 
 export function Customers() {
   const [customers, setCustomers] = useState<(Customer & { regionData?: Region; industryData?: Industry })[]>([]);
@@ -257,7 +258,7 @@ export function Customers() {
                   {customer.contact_email}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${customer.annual_volume.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(customer.annual_volume)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button

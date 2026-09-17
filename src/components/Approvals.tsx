@@ -3,6 +3,7 @@ import { getCurrentUser } from '../lib/currentUser';
 import { db } from '../lib/dataClient';
 import { Quote, Customer } from '../types';
 import { CheckCircle, XCircle, AlertCircle, TrendingUp, Shield, Users, DollarSign, Percent, ChevronRight } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 
 interface ApprovalRequest {
   id: string;
@@ -359,7 +360,7 @@ export function Approvals() {
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-slate-900">
-                        ${quote?.total.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
+                        {formatCurrency(quote?.total)}
                       </div>
                       <div className="text-xs text-slate-500 mt-1">
                         {new Date(approval.requested_at).toLocaleDateString()}

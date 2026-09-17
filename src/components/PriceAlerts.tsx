@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
 import { AlertTriangle, Plus, X, Check, Clock, TrendingUp, DollarSign, Calendar, Info, CheckSquare, Square } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 
 interface PriceAlert {
   id: string;
@@ -492,7 +493,7 @@ export function PriceAlerts() {
                   <option value="">Select a product...</option>
                   {products.map((product) => (
                     <option key={product.id} value={product.id}>
-                      {product.name} - {product.category} (Current cost: ${product.base_cost.toFixed(2)})
+                      {product.name} - {product.category} (Current cost: {formatCurrency(product.base_cost)})
                     </option>
                   ))}
                 </select>

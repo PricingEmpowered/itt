@@ -299,9 +299,15 @@ async function main() {
         );
       }
       for (const id of missingParts) {
+        /*
+         * base_cost is NULL, not 0. The column defaults to 0, and a zero cost
+         * reads as a 100% margin everywhere rather than as unknown. A
+         * placeholder product knows nothing about cost.
+         */
         await client.query(
           `INSERT INTO products (id, name, category, base_cost, uom, status)
-           VALUES ($1, $1, 'Uncategorised', 0, 'EA', 'Active') ON CONFLICT (id) DO NOTHING`,
+           VALUES ($1, $1, 'Uncategorised', NULL, 'EA', 'Active')
+           ON CONFLICT (id) DO NOTHING`,
           [id]
         );
       }

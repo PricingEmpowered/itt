@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
 import { Product, ProductFamily } from '../types';
 import { Plus, Edit2, Trash2, Filter, AlertTriangle } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 
 interface ProductWithAlert extends Product {
   family?: ProductFamily;
@@ -257,7 +258,7 @@ export function ProductCatalog() {
                   {product.category}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${product.base_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(product.base_cost)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {product.uom}

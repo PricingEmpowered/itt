@@ -100,11 +100,13 @@ function App() {
       </nav>
 
       <div className="flex">
-        <aside className="w-72 bg-white min-h-screen shadow-xl border-r border-slate-200 overflow-y-auto">
+        {/* shrink-0: without it the wide tables in <main> squeeze the nav and clip its labels */}
+        <aside className="w-72 shrink-0 bg-white min-h-screen shadow-xl border-r border-slate-200 overflow-y-auto">
           <NavigationMenu currentView={currentView} onViewChange={setCurrentView} />
         </aside>
 
-        <main className="flex-1 p-8 bg-gradient-to-br from-slate-50 via-white to-slate-50">
+        {/* min-w-0 lets this shrink below its content width, so wide tables scroll here instead of pushing the layout */}
+        <main className="flex-1 min-w-0 p-8 bg-gradient-to-br from-slate-50 via-white to-slate-50">
           <div className="max-w-7xl mx-auto">
             <Suspense fallback={<LoadingSpinner />}>
               {currentView === 'dashboard' && <DashboardEnhanced />}

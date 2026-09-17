@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatCurrency } from '../utils/format';
 
 interface QuoteData {
   id: string;
@@ -69,7 +70,7 @@ export async function generateQuotePDF(quote: QuoteData) {
     line.product?.name || line.product_id,
     line.product?.category || 'N/A',
     line.quantity.toString(),
-    `$${line.unit_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    formatCurrency(line.unit_price),
     `${line.discount_applied.toFixed(1)}%`,
     `$${line.line_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   ]);
@@ -106,7 +107,7 @@ export async function generateQuotePDF(quote: QuoteData) {
 
   const summaryX = pageWidth - 70;
   doc.text('Subtotal:', summaryX, finalY);
-  doc.text(`$${quote.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pageWidth - 15, finalY, { align: 'right' });
+  doc.text(formatCurrency(quote.subtotal), pageWidth - 15, finalY, { align: 'right' });
 
   doc.text('Tax:', summaryX, finalY + 7);
   doc.text(`$${quote.tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pageWidth - 15, finalY + 7, { align: 'right' });
@@ -117,7 +118,7 @@ export async function generateQuotePDF(quote: QuoteData) {
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Total:', summaryX, finalY + 17);
-  doc.text(`$${quote.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pageWidth - 15, finalY + 17, { align: 'right' });
+  doc.text(formatCurrency(quote.total), pageWidth - 15, finalY + 17, { align: 'right' });
 
   const footerY = doc.internal.pageSize.getHeight() - 20;
   doc.setFontSize(8);

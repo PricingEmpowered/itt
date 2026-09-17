@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
 import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 
 interface PriceGuidanceProps {
   productId: string;
@@ -243,7 +244,7 @@ export function PriceGuidance({ productId, unitPrice, discount, customerId }: Pr
               <div className="flex items-center gap-3">
                 <span className="text-slate-600">{peer.quantity}x units</span>
                 <span className="font-semibold text-slate-900">
-                  ${peer.unit_price.toFixed(2)}
+                  {formatCurrency(peer.unit_price)}
                 </span>
               </div>
             </div>

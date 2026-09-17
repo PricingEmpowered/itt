@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
 import { PriceList, PriceListItem, Product, Currency } from '../types';
 import { Plus, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, Percent, Target, TrendingDown as TrendingDownIcon, TrendingUp as TrendingUpIcon, Calendar } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 
 export function PriceLists() {
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
@@ -300,7 +301,7 @@ export function PriceLists() {
                         {item.product?.category || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                        ${item.list_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatCurrency(item.list_price)}
                       </td>
                     </tr>
                   ))}

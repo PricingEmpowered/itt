@@ -1,4 +1,5 @@
 import { QuantityBreak } from '../types';
+import { formatCurrency } from '../utils/format';
 
 export interface QuantityBreakResult {
   basePrice: number;
@@ -93,7 +94,7 @@ export function formatQuantityBreakPricing(qb: QuantityBreak): string {
     return `${qb.discount_percent}% off`;
   }
   if (qb.fixed_price !== null && qb.fixed_price !== undefined) {
-    return `$${qb.fixed_price.toFixed(2)}/unit`;
+    return `${formatCurrency(qb.fixed_price)}/unit`;
   }
   return 'N/A';
 }

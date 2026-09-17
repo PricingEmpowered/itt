@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
 import { QuantityBreak, Product, PriceList, ProductFamily } from '../types';
 import { Plus, Trash2, X, Layers, Copy } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 
 export function QuantityBreaks() {
   const [quantityBreaks, setQuantityBreaks] = useState<QuantityBreak[]>([]);
@@ -788,7 +789,7 @@ export function QuantityBreaks() {
                               </span>
                             ) : qb.fixed_price ? (
                               <span className="text-blue-600 font-medium">
-                                ${qb.fixed_price.toFixed(2)} per unit
+                                {formatCurrency(qb.fixed_price)} per unit
                               </span>
                             ) : (
                               'N/A'

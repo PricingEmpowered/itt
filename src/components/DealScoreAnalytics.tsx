@@ -187,6 +187,14 @@ export function DealScoreAnalytics() {
         ...(productData.data || []).map(m => ({ ...m, type: 'product_family' })),
         ...(customerData.data || []).map(m => ({ ...m, type: 'customer_segment' }))
       ].forEach((metric: any) => {
+        /*
+         * Real data has products with no family and customers with no
+         * segment, so a metric row can arrive with a null segment_value.
+         * A recommendation about an unnamed segment is not actionable, and
+         * segment_value is NOT NULL, so skip rather than fail the write.
+         */
+        if (!metric.segment_value) return;
+
         if (metric.escalation_rate > 0.35 && metric.total_deals >= 5) {
           newRecommendations.push({
             segment_type: metric.type,

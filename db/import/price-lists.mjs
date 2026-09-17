@@ -141,9 +141,17 @@ async function main() {
 
     for (const item of items) {
       // The item master may not have been loaded, or may not carry this part.
+      /*
+       * base_cost is set explicitly NULL: the column defaults to 0, and a
+       * zero cost is worse than an unknown one — it computes as a 100%
+       * margin everywhere rather than showing as missing. This import has no
+       * opinion about cost (see the note above), so it must not leave the
+       * default standing. On conflict it is left untouched, so a cost from
+       * another source is never overwritten.
+       */
       await client.query(
-        `INSERT INTO products (id, name, uom, status, attributes)
-         VALUES ($1, $1, 'EA', 'Active', $2)
+        `INSERT INTO products (id, name, uom, status, base_cost, attributes)
+         VALUES ($1, $1, 'EA', 'Active', NULL, $2)
          ON CONFLICT (id) DO UPDATE SET attributes = products.attributes || EXCLUDED.attributes`,
         [item.partNumber, JSON.stringify({
           ...item.attributes,

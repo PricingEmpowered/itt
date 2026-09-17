@@ -118,7 +118,7 @@ async function main() {
     for (const p of products) {
       await client.query(
         `INSERT INTO products (id, name, category, family_id, attributes, base_cost, uom, status)
-         VALUES ($1, $2, $3, $4, $5, NULL, 'EA', 'Active')
+         VALUES ($1, $2, $3, $4, $5, NULL, 'EA', 'Active')  -- base_cost NULL: no extract carries a cost basis
          ON CONFLICT (id) DO UPDATE
            SET name = EXCLUDED.name,
                category = EXCLUDED.category,
