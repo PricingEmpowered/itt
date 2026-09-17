@@ -3,7 +3,7 @@ import { db } from '../lib/dataClient';
 import { Customer, Region, Industry } from '../types';
 import { Plus, Edit2, Trash2, Search, Filter, DollarSign, Settings } from 'lucide-react';
 import { PriceListModal, AttributesModal } from './CustomerModals';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, formatNumber, MISSING } from '../utils/format';
 
 export function Customers() {
   const [customers, setCustomers] = useState<(Customer & { regionData?: Region; industryData?: Industry })[]>([]);
@@ -55,11 +55,16 @@ export function Customers() {
     let filtered = [...customers];
 
     if (searchTerm) {
-      filtered = filtered.filter(
-        (c) =>
-          c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          c.contact_email.toLowerCase().includes(searchTerm.toLowerCase())
+      /*
+       * Optional chaining is load-bearing: 18 of the imported ITT customers
+       * have no contact email, and calling toLowerCase() on that null threw
+       * on the first keystroke and blanked the screen.
+       */
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((c) =>
+        [c.name, c.id, c.contact_email, c.segment].some((field) =>
+          field?.toLowerCase().includes(term)
+        )
       );
     }
 
@@ -119,8 +124,28 @@ export function Customers() {
     setEditingCustomer(null);
   };
 
-  const segments = Array.from(new Set(customers.map((c) => c.segment))).sort();
-  const legacyRegions = Array.from(new Set(customers.map((c) => c.region))).sort();
+  const segments = Array.from(
+    new Set(customers.map((c) => c.segment).filter(Boolean))
+  ).sort();
+  const legacyRegions = Array.from(
+    new Set(customers.map((c) => c.region).filter(Boolean))
+  ).sort();
+
+  /*
+   * Quick stats by segment, over whatever the filters currently show, so
+   * narrowing to one region restates the mix for that region rather than
+   * repeating the global totals.
+   */
+  const segmentStats = Array.from(
+    filteredCustomers.reduce((acc, c) => {
+      const key = c.segment || 'Unsegmented';
+      const stat = acc.get(key) || { segment: key, count: 0, revenue: 0 };
+      stat.count += 1;
+      stat.revenue += Number(c.annual_revenue) || 0;
+      acc.set(key, stat);
+      return acc;
+    }, new Map<string, { segment: string; count: number; revenue: number }>()).values()
+  ).sort((a, b) => b.count - a.count);
 
   if (loading) {
     return <div className="flex justify-center p-8">Loading customers...</div>;
@@ -206,6 +231,37 @@ export function Customers() {
         </div>
       </div>
 
+      {segmentStats.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {segmentStats.map((stat) => (
+            <button
+              key={stat.segment}
+              type="button"
+              onClick={() =>
+                setFilterSegment(filterSegment === stat.segment ? '' : stat.segment)
+              }
+              className={`text-left bg-white rounded-lg shadow p-3 border-2 transition-colors ${
+                filterSegment === stat.segment
+                  ? 'border-blue-500'
+                  : 'border-transparent hover:border-gray-200'
+              }`}
+            >
+              <div className="text-xs font-medium text-gray-500 truncate" title={stat.segment}>
+                {stat.segment}
+              </div>
+              <div className="text-xl font-bold text-gray-900">
+                {formatNumber(stat.count)}
+              </div>
+              <div className="text-xs text-gray-500">
+                {stat.revenue > 0
+                  ? `${formatCurrency(stat.revenue, { decimals: 0 })} revenue`
+                  : 'revenue not recorded'}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow overflow-auto max-h-[calc(100vh-280px)]">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0 z-10">
@@ -229,7 +285,13 @@ export function Customers() {
                 Contact Email
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Payment Terms
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Annual Volume
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Annual Revenue
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -246,19 +308,25 @@ export function Customers() {
                   {customer.name}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {customer.segment}
+                  {customer.segment || MISSING}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {customer.regionData?.name || customer.region}
+                  {customer.regionData?.name || customer.region || MISSING}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {customer.industryData?.name || 'N/A'}
+                  {customer.industryData?.name || MISSING}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {customer.contact_email}
+                  {customer.contact_email || MISSING}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {customer.payment_terms || MISSING}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right tabular-nums">
                   {formatCurrency(customer.annual_volume)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right tabular-nums">
+                  {formatCurrency(customer.annual_revenue, { decimals: 0 })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
@@ -361,6 +429,7 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
       industry_id: '',
       contact_email: '',
       annual_volume: 0,
+      payment_terms: '',
     }
   );
   const [regions, setRegions] = useState<Region[]>([]);
@@ -388,15 +457,27 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
     e.preventDefault();
     setSaving(true);
 
+    /*
+     * The row this modal was opened with carries the joined region and
+     * industry records alongside the real columns. Sending those back was
+     * rejected as unknown columns, so editing an existing customer always
+     * failed; only the table's own columns go to the server.
+     */
+    const { regionData, industryData, ...columns } = formData as Record<string, unknown>;
+    void regionData;
+    void industryData;
+    // An empty terms box means "not recorded", which is NULL, not ''.
+    const payload = { ...columns, payment_terms: formData.payment_terms || null };
+
     try {
       if (customer) {
         const { error } = await db
           .from('customers')
-          .update(formData)
+          .update(payload)
           .eq('id', customer.id);
         if (error) throw error;
       } else {
-        const { error } = await db.from('customers').insert([formData]);
+        const { error } = await db.from('customers').insert([payload]);
         if (error) throw error;
       }
       onSave();
@@ -446,10 +527,27 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
                 Segment
               </label>
               <select
-                value={formData.segment}
+                value={formData.segment || ''}
                 onChange={(e) => setFormData({ ...formData, segment: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
+                {/*
+                  Imported customers carry segments outside this list
+                  ("Unknown", "Distribution"). Without an option matching the
+                  current value the select would show - and on save write -
+                  the first option instead, silently resegmenting the account.
+                */}
+                {formData.segment &&
+                  ![
+                    'Tier 1 Industrial',
+                    'Tier 2 Industrial',
+                    'Tier 3 Industrial',
+                    'OEM',
+                    'Distributor',
+                    'End User',
+                  ].includes(formData.segment) && (
+                    <option value={formData.segment}>{formData.segment}</option>
+                  )}
                 <option value="Tier 1 Industrial">Tier 1 Industrial</option>
                 <option value="Tier 2 Industrial">Tier 2 Industrial</option>
                 <option value="Tier 3 Industrial">Tier 3 Industrial</option>
@@ -462,10 +560,10 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Contact Email
               </label>
+              {/* Not required: imported ITT customers legitimately have no email. */}
               <input
                 type="email"
-                required
-                value={formData.contact_email}
+                value={formData.contact_email || ''}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -509,10 +607,20 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
                 Region (Legacy)
               </label>
               <select
-                value={formData.region}
+                value={formData.region || ''}
                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
+                {formData.region &&
+                  ![
+                    'North America',
+                    'Europe',
+                    'Asia Pacific',
+                    'Latin America',
+                    'Middle East',
+                  ].includes(formData.region) && (
+                    <option value={formData.region}>{formData.region}</option>
+                  )}
                 <option value="North America">North America</option>
                 <option value="Europe">Europe</option>
                 <option value="Asia Pacific">Asia Pacific</option>
@@ -522,15 +630,43 @@ function CustomerModal({ customer, onClose, onSave }: CustomerModalProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Payment Terms
+              </label>
+              <input
+                type="text"
+                list="payment-terms-options"
+                placeholder="e.g. Net 30"
+                value={formData.payment_terms || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, payment_terms: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {/* Suggestions, not a closed list: ITT negotiates terms per account. */}
+              <datalist id="payment-terms-options">
+                <option value="Net 30" />
+                <option value="Net 45" />
+                <option value="Net 60" />
+                <option value="Net 90" />
+                <option value="2/10 Net 30" />
+                <option value="Due on Receipt" />
+                <option value="Prepaid" />
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Annual Volume ($)
               </label>
               <input
                 type="number"
                 step="0.01"
                 required
-                value={formData.annual_volume}
+                value={formData.annual_volume ?? 0}
                 onChange={(e) =>
-                  setFormData({ ...formData, annual_volume: parseFloat(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    annual_volume: Number(e.target.value) || 0,
+                  })
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />

@@ -90,6 +90,8 @@ export interface Customer {
   contact_email: string;
   annual_volume: number;
   annual_revenue?: number;
+  /** Free text, e.g. "Net 30". Null where ITT's extract did not record any. */
+  payment_terms?: string | null;
   attributes?: Record<string, any>;
   created_at?: string;
 }

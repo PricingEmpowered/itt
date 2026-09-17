@@ -124,8 +124,17 @@ async function main() {
 
     for (const c of customers.values()) {
       await client.query(
-        `INSERT INTO customers (id, name, segment, region, region_id, industry_id, attributes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        /*
+         * annual_volume and annual_revenue are written explicitly NULL. Both
+         * columns default to 0, and ITT's customer extract (Customer No,
+         * Name, Region, State, Sales Person, Industry/Type, Channel) carries
+         * neither figure. Letting the default stand puts "$0.00 annual
+         * volume" against a real account, which reads as a customer that
+         * buys nothing rather than as a figure nobody supplied.
+         */
+        `INSERT INTO customers (id, name, segment, region, region_id, industry_id, attributes,
+                                annual_volume, annual_revenue)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)
          ON CONFLICT (id) DO UPDATE
            SET name = EXCLUDED.name,
                segment = EXCLUDED.segment,
