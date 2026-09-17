@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc.js';
+import { calculateDealScore } from '../dealScore.js';
 
 /*
  * json_agg over a LEFT JOIN would produce `[null]` for a quote with no
@@ -89,6 +90,29 @@ export const quotesRouter = router({
         const { rows } = await db.query(`${QUOTE_SELECT} WHERE q.id = $1`, [input.id]);
         return rows[0] ?? null;
       })
+    ),
+
+  /*
+   * Scores a quote against comparable historical deals. See server/dealScore.ts
+   * for why this cannot be done from the browser.
+   */
+  dealScore: protectedProcedure
+    .input(
+      z.object({
+        customerId: z.string().min(1).max(100),
+        lines: z
+          .array(
+            z.object({
+              product_id: z.string().min(1).max(200),
+              unit_price: z.number().nullable(),
+              discount_applied: z.number().nullable(),
+            })
+          )
+          .max(500),
+      })
+    )
+    .query(({ ctx, input }) =>
+      ctx.withDb((db) => calculateDealScore(db, input.customerId, input.lines))
     ),
 
   count: protectedProcedure.query(({ ctx }) =>

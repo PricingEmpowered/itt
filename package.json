@@ -14,6 +14,7 @@
     "server": "tsx watch server/index.ts",
     "server:start": "NODE_ENV=production tsx server/index.ts",
     "create-user": "tsx server/create-user.ts",
+    "score-quotes": "tsx server/score-quotes.ts",
     "typecheck:server": "tsc --noEmit -p tsconfig.server.json"
   },
   "dependencies": {
