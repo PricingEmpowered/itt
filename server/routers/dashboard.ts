@@ -323,42 +323,62 @@ export const dashboardRouter = router({
           realization: string | null;
           revenue: string | null;
         }>(
-          `WITH scope AS (
-             SELECT ql.product_id,
-                    ql.unit_price,
-                    COALESCE(ql.discount_applied, 0) AS discount,
-                    COALESCE(ql.quantity, 1)         AS qty,
-                    COALESCE(ql.booked_cost, p.base_cost) AS cost,
-                    COALESCE(
-                      (SELECT pli.list_price FROM price_list_items pli
-                        WHERE pli.product_id = ql.product_id
-                          AND pli.price_list_id = q.price_list_id),
-                      (SELECT max(pli.list_price) FROM price_list_items pli
-                        WHERE pli.product_id = ql.product_id)
-                    ) AS list_price
+          `WITH best_list AS (
+             /*
+              * One row per product, computed once. This was two correlated
+              * subqueries evaluated per line, which at three million lines
+              * meant a million executions each and took the query from 1.4
+              * seconds to 8.4.
+              */
+             SELECT product_id, max(list_price) AS list_price
+               FROM price_list_items GROUP BY product_id
+           ),
+           priced AS (
+             SELECT COALESCE(ql.discount_applied, 0)            AS discount,
+                    COALESCE(ql.quantity, 1)                    AS qty,
+                    COALESCE(ql.booked_cost, p.base_cost)       AS cost,
+                    COALESCE(pl.list_price, bl.list_price)      AS list_price,
+                    ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100)
+                      AS effective
                FROM quote_lines ql
                JOIN quotes   q ON q.id = ql.quote_id
                JOIN products p ON p.id = ql.product_id
+               LEFT JOIN best_list bl
+                 ON bl.product_id = ql.product_id
+               LEFT JOIN price_list_items pl
+                 ON pl.product_id = ql.product_id
+                AND pl.price_list_id = q.price_list_id
               WHERE q.created_at >= now() - make_interval(days => $1)
+                AND ql.unit_price IS NOT NULL
+                AND ql.unit_price > 0
            ),
-           priced AS (
-             SELECT *, unit_price * (1 - discount / 100) AS effective
-               FROM scope WHERE unit_price IS NOT NULL AND unit_price > 0
+           /* Lines in the window regardless of whether they carry a price. */
+           total AS (
+             SELECT count(*) AS lines
+               FROM quote_lines ql
+               JOIN quotes q ON q.id = ql.quote_id
+              WHERE q.created_at >= now() - make_interval(days => $1)
            )
-           SELECT (SELECT count(*) FROM scope)  AS lines,
-                  (SELECT count(*) FROM priced) AS priced_lines,
-                  (SELECT count(*) FROM priced WHERE cost IS NOT NULL AND cost > 0)
-                    AS costed_lines,
-                  (SELECT count(*) FROM priced WHERE list_price IS NOT NULL AND list_price > 0)
-                    AS listed_lines,
-                  (SELECT avg(discount) FROM priced) AS avg_discount,
-                  (SELECT avg((effective - cost) / effective * 100)
-                     FROM priced WHERE cost IS NOT NULL AND cost > 0 AND effective > 0)
-                    AS avg_margin,
-                  (SELECT sum(effective * qty) / NULLIF(sum(list_price * qty), 0) * 100
-                     FROM priced WHERE list_price IS NOT NULL AND list_price > 0)
-                    AS realization,
-                  (SELECT sum(effective * qty) FROM priced) AS revenue`,
+           /*
+            * One pass with FILTER rather than a scalar subquery per metric.
+            * Six subqueries over the same CTE meant six scans of it.
+            */
+           SELECT (SELECT lines FROM total)                        AS lines,
+                  count(*)                                         AS priced_lines,
+                  count(*) FILTER (WHERE cost IS NOT NULL AND cost > 0)
+                                                                   AS costed_lines,
+                  count(*) FILTER (WHERE list_price IS NOT NULL AND list_price > 0)
+                                                                   AS listed_lines,
+                  avg(discount)                                    AS avg_discount,
+                  avg((effective - cost) / effective * 100)
+                    FILTER (WHERE cost IS NOT NULL AND cost > 0 AND effective > 0)
+                                                                   AS avg_margin,
+                  sum(effective * qty) FILTER (WHERE list_price IS NOT NULL AND list_price > 0)
+                    / NULLIF(sum(list_price * qty)
+                        FILTER (WHERE list_price IS NOT NULL AND list_price > 0), 0)
+                    * 100                                          AS realization,
+                  sum(effective * qty)                             AS revenue
+             FROM priced`,
           [days]
         );
 
