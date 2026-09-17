@@ -5,6 +5,11 @@ import { Eye, Trash2, Search, Filter, Printer, Clock } from 'lucide-react';
 import { generateQuotePDF } from '../utils/pdfGenerator';
 import { DealScoreIndicator, DealScoreCard } from './DealScoreIndicator';
 import { formatCurrency } from '../utils/format';
+import {
+  QUOTE_STATUSES,
+  quoteStatusBadge,
+  quoteStatusCountColor,
+} from '../utils/quoteStatus';
 
 interface QuoteWithDetails extends Quote {
   customer?: Customer & { regionData?: Region; industryData?: Industry };
@@ -147,20 +152,30 @@ export function Quotes() {
     setSelectedQuote(null);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'Under Review':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Approved':
-        return 'bg-green-100 text-green-800';
-      case 'Rejected':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const getStatusColor = quoteStatusBadge;
+
+  /*
+   * The defined vocabulary, plus anything the data actually carries that the
+   * vocabulary does not - so an unexpected status is visible rather than
+   * silently uncounted, which is the failure this replaces.
+   */
+  const statusOptions = Array.from(
+    new Set([
+      ...QUOTE_STATUSES,
+      ...quotes.map((q) => q.status).filter((s): s is string => !!s),
+    ])
+  );
+
+  const statusCounts = statusOptions
+    .map((status) => ({
+      status,
+      count: quotes.filter((q) => q.status === status).length,
+    }))
+    /* Hide statuses this dataset never uses; keep the core four regardless. */
+    .filter(
+      ({ status, count }) =>
+        count > 0 || ['Draft', 'Under Review', 'Approved', 'Rejected'].includes(status)
+    );
 
   if (loading) {
     return <div className="flex justify-center p-8">Loading quotes...</div>;
@@ -177,31 +192,26 @@ export function Quotes() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-600">Draft</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">
-            {quotes.filter((q) => q.status === 'Draft').length}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-600">Under Review</div>
-          <div className="text-2xl font-bold text-yellow-600 mt-1">
-            {quotes.filter((q) => q.status === 'Under Review').length}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-600">Approved</div>
-          <div className="text-2xl font-bold text-green-600 mt-1">
-            {quotes.filter((q) => q.status === 'Approved').length}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-600">Rejected</div>
-          <div className="text-2xl font-bold text-red-600 mt-1">
-            {quotes.filter((q) => q.status === 'Rejected').length}
-          </div>
-        </div>
+      {/*
+        One tile per status that the vocabulary defines and the data uses.
+        A fixed four-tile row left "Sent" quotes counted nowhere.
+      */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {statusCounts.map(({ status, count }) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => setFilterStatus(filterStatus === status ? '' : status)}
+            className={`bg-white rounded-lg shadow p-4 text-left border-2 transition-colors ${
+              filterStatus === status ? 'border-blue-500' : 'border-transparent hover:border-gray-200'
+            }`}
+          >
+            <div className="text-sm text-gray-600">{status}</div>
+            <div className={`text-2xl font-bold mt-1 ${quoteStatusCountColor(status)}`}>
+              {count}
+            </div>
+          </button>
+        ))}
       </div>
 
       <div className="bg-white rounded-lg shadow p-4">
@@ -226,10 +236,11 @@ export function Quotes() {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">All Statuses</option>
-            <option value="Draft">Draft</option>
-            <option value="Under Review">Under Review</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
           </select>
           <select
             value={filterSegment}
@@ -402,20 +413,7 @@ interface QuoteDetailModalProps {
 }
 
 function QuoteDetailModal({ quote, onClose }: QuoteDetailModalProps) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'Under Review':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Approved':
-        return 'bg-green-100 text-green-800';
-      case 'Rejected':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const getStatusColor = quoteStatusBadge;
 
   const handlePrintPDF = () => {
     generateQuotePDF(quote as any);
