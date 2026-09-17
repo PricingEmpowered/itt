@@ -343,8 +343,14 @@ async function main() {
         [
           quote.id,
           quote.customerNumber,
-          // Outcome drives status; without one the quote is simply open.
-          quote.outcome ?? 'Quoted',
+          /*
+           * Status must be one the rest of the app recognises: the dashboard
+           * counts a quote as active when its status is Draft, Sent, Pending
+           * Approval or Under Review. An issued quote with no outcome yet is
+           * "Sent"; inventing a status like "Quoted" left real open quotes
+           * uncounted everywhere.
+           */
+          quote.outcome ?? 'Sent',
           quote.outcome,
           quote.quoteDate,
           quote.requestDate,

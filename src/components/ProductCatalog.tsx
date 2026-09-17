@@ -1,14 +1,27 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
 import { Product, ProductFamily } from '../types';
-import { Plus, Edit2, Trash2, Filter, AlertTriangle } from 'lucide-react';
-import { formatCurrency } from '../utils/format';
+import { Plus, Edit2, Trash2, Filter, AlertTriangle, Search } from 'lucide-react';
+import { formatCurrency, formatPercent, asNumber } from '../utils/format';
 
 interface ProductWithAlert extends Product {
   family?: ProductFamily;
   has_active_alert?: boolean;
   alert_urgency?: string;
 }
+
+interface PriceListOption {
+  id: string;
+  name: string;
+}
+
+/**
+ * A product's list price is not a single number: ITT prices the same part
+ * differently on each of its price lists (NA/EU x OEM/distribution). The
+ * catalogue therefore shows the price from one named list at a time rather
+ * than inventing a "the" list price, and the selector says which one.
+ */
+type ListPriceIndex = Map<string, Map<string, number>>;
 
 export function ProductCatalog() {
   const [products, setProducts] = useState<ProductWithAlert[]>([]);
@@ -20,15 +33,26 @@ export function ProductCatalog() {
   const [filterFamily, setFilterFamily] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [priceLists, setPriceLists] = useState<PriceListOption[]>([]);
+  const [priceListId, setPriceListId] = useState('');
+  const [listPrices, setListPrices] = useState<ListPriceIndex>(new Map());
 
   useEffect(() => {
     loadProducts();
     loadFamilies();
+    loadPriceLists();
   }, []);
 
   useEffect(() => {
     filterProductsList();
-  }, [products, filterFamily, filterCategory, filterStatus]);
+  }, [products, filterFamily, filterCategory, filterStatus, search]);
+
+  useEffect(() => {
+    if (priceListId && !listPrices.has(priceListId)) {
+      loadListPrices(priceListId);
+    }
+  }, [priceListId, listPrices]);
 
   const loadFamilies = async () => {
     try {
@@ -41,6 +65,69 @@ export function ProductCatalog() {
     } catch (error) {
       console.error('Error loading families:', error);
     }
+  };
+
+  const loadPriceLists = async () => {
+    try {
+      const { data, error } = await db
+        .from('price_lists')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+
+      const options: PriceListOption[] = data || [];
+      setPriceLists(options);
+
+      /*
+       * Default to the list that actually prices the most products. A list
+       * with no items renders an entire column of placeholders, which reads
+       * as a broken screen rather than as "this list is empty".
+       */
+      const { data: counts } = await db
+        .from('price_list_items')
+        .select('price_list_id');
+      const tally = new Map<string, number>();
+      for (const row of counts || []) {
+        tally.set(row.price_list_id, (tally.get(row.price_list_id) || 0) + 1);
+      }
+      const busiest = options
+        .slice()
+        .sort((a, b) => (tally.get(b.id) || 0) - (tally.get(a.id) || 0))[0];
+      setPriceListId(busiest?.id ?? '');
+    } catch (error) {
+      console.error('Error loading price lists:', error);
+    }
+  };
+
+  /** Prices for one list, fetched on demand and kept once fetched. */
+  const loadListPrices = async (listId: string) => {
+    try {
+      const { data, error } = await db
+        .from('price_list_items')
+        .select('product_id, list_price')
+        .eq('price_list_id', listId);
+      if (error) throw error;
+
+      const byProduct = new Map<string, number>();
+      for (const item of data || []) {
+        const price = asNumber(item.list_price);
+        if (price !== null) byProduct.set(item.product_id, price);
+      }
+      setListPrices((current) => new Map(current).set(listId, byProduct));
+    } catch (error) {
+      console.error('Error loading price list items:', error);
+    }
+  };
+
+  const listPriceFor = (productId: string): number | null =>
+    listPrices.get(priceListId)?.get(productId) ?? null;
+
+  /** Gross margin on the selected list price. Needs both sides to mean anything. */
+  const marginFor = (product: ProductWithAlert): number | null => {
+    const listPrice = listPriceFor(product.id);
+    const cost = asNumber(product.base_cost);
+    if (listPrice === null || cost === null || listPrice === 0) return null;
+    return ((listPrice - cost) / listPrice) * 100;
   };
 
   const filterProductsList = () => {
@@ -56,6 +143,14 @@ export function ProductCatalog() {
 
     if (filterStatus) {
       filtered = filtered.filter(p => p.status === filterStatus);
+    }
+
+    const term = search.trim().toLowerCase();
+    if (term) {
+      filtered = filtered.filter(p =>
+        [p.id, p.name, p.category, p.family?.name]
+          .some(field => field?.toLowerCase().includes(term))
+      );
     }
 
     setFilteredProducts(filtered);
@@ -142,7 +237,20 @@ export function ProductCatalog() {
           <Filter size={20} className="text-gray-500" />
           <h3 className="text-sm font-medium text-gray-700">Filters</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="relative mb-4">
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by part number, name, family or category"
+            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Product Family
@@ -190,10 +298,31 @@ export function ProductCatalog() {
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Price List
+            </label>
+            <select
+              value={priceListId}
+              onChange={(e) => setPriceListId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {priceLists.length === 0 && <option value="">No price lists</option>}
+              {priceLists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-3 border-b border-gray-200 text-sm text-gray-600">
+          Showing {filteredProducts.length.toLocaleString()} of{' '}
+          {products.length.toLocaleString()} products
+        </div>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -209,8 +338,14 @@ export function ProductCatalog() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Category
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Base Cost
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                List Price
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Margin %
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 UOM
@@ -224,6 +359,13 @@ export function ProductCatalog() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
+            {filteredProducts.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-6 py-10 text-center text-sm text-gray-500">
+                  No products match the current filters.
+                </td>
+              </tr>
+            )}
             {filteredProducts.map((product) => (
               <tr key={product.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -257,8 +399,18 @@ export function ProductCatalog() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {product.category}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right tabular-nums">
                   {formatCurrency(product.base_cost)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right tabular-nums">
+                  {formatCurrency(listPriceFor(product.id))}
+                </td>
+                <td
+                  className={`px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums ${
+                    (marginFor(product) ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                  }`}
+                >
+                  {formatPercent(marginFor(product))}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {product.uom}
