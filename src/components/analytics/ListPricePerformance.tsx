@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../lib/dataClient';
 import { LoadingSpinner } from '../LoadingSpinner';
+import { formatPercent } from '../../utils/format';
 
 interface PricePerformanceData {
   product_id: string;
@@ -16,7 +17,6 @@ interface PricePerformanceData {
 export function ListPricePerformance() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PricePerformanceData[]>([]);
-  const [competitor, setCompetitor] = useState('Competitor A');
 
   useEffect(() => {
     loadData();
@@ -71,16 +71,14 @@ export function ListPricePerformance() {
           <h3 className="text-lg font-semibold text-slate-900">
             Margin vs Sales Analysis
           </h3>
-          <select
-            value={competitor}
-            onChange={(e) => setCompetitor(e.target.value)}
-            className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option>Competitor A</option>
-            <option>Competitor B</option>
-            <option>Competitor C</option>
-            <option>Competitor D</option>
-          </select>
+          {/*
+            This was a selector offering Competitor A through D. Three of the
+            four did nothing: analytics_price_performance carries a single
+            comparison column, price_premium_vs_comp_a, and the selection was
+            never read by any query. Naming the one benchmark that exists is
+            better than implying four.
+          */}
+          <span className="text-sm text-slate-500">vs primary competitor benchmark</span>
         </div>
 
         <div className="relative h-80 border border-slate-200 rounded-lg p-4">
@@ -120,28 +118,36 @@ export function ListPricePerformance() {
             <div className="text-sm text-green-700 mb-1">Category A</div>
             <div className="text-2xl font-bold text-green-900">{categoryCounts.A}</div>
             <div className="text-xs text-green-600 mt-1">
-              {((categorySales.A / totalSales) * 100).toFixed(1)}% of sales
+              {totalSales > 0
+                ? `${formatPercent((categorySales.A / totalSales) * 100)} of sales`
+                : 'no sales recorded'}
             </div>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="text-sm text-blue-700 mb-1">Category B</div>
             <div className="text-2xl font-bold text-blue-900">{categoryCounts.B}</div>
             <div className="text-xs text-blue-600 mt-1">
-              {((categorySales.B / totalSales) * 100).toFixed(1)}% of sales
+              {totalSales > 0
+                ? `${formatPercent((categorySales.B / totalSales) * 100)} of sales`
+                : 'no sales recorded'}
             </div>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="text-sm text-yellow-700 mb-1">Category C</div>
             <div className="text-2xl font-bold text-yellow-900">{categoryCounts.C}</div>
             <div className="text-xs text-yellow-600 mt-1">
-              {((categorySales.C / totalSales) * 100).toFixed(1)}% of sales
+              {totalSales > 0
+                ? `${formatPercent((categorySales.C / totalSales) * 100)} of sales`
+                : 'no sales recorded'}
             </div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
             <div className="text-sm text-slate-700 mb-1">Category D</div>
             <div className="text-2xl font-bold text-slate-900">{categoryCounts.D}</div>
             <div className="text-xs text-slate-600 mt-1">
-              {((categorySales.D / totalSales) * 100).toFixed(1)}% of sales
+              {totalSales > 0
+                ? `${formatPercent((categorySales.D / totalSales) * 100)} of sales`
+                : 'no sales recorded'}
             </div>
           </div>
         </div>

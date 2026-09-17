@@ -25,13 +25,32 @@ import pg from 'pg';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /*
- * These four files live in supabase/migrations but are demo data, not schema.
- * They insert ~3,800 historical quotes and depend on a price list and an
- * auth.users row that no schema migration creates, so a production install
- * must not run them. db/seed/001_demo_prerequisites.sql supplies what they
- * need when demo data is requested.
+ * These files live in supabase/migrations but are demo data, not schema, and
+ * a production install must not run them. They are listed in dependency
+ * order: the quote history reads the products and customers the hierarchy
+ * seed creates. db/seed/001_demo_prerequisites.sql supplies the price list
+ * and auth.users row they also need.
+ *
+ * The first two are here because of what they do to a database that already
+ * holds real data, not only because of what they add:
+ *
+ * - The hierarchy seed generates 100 products priced with `random() * 500`
+ *   and 200 customers named "Customer Tier 2 Industrial 54". Worse, before
+ *   generating them it round-robins arbitrary families onto every product
+ *   with no family, and arbitrary regions and industries onto every customer
+ *   missing either - so on an install carrying ITT's catalogue it would
+ *   quietly assign invented hierarchy to real parts and real accounts.
+ *
+ * - The analytics seed writes twelve months of invented 2023 business
+ *   performance: $1.85M-$2.4M of monthly revenue, 1,205-1,250 active
+ *   customers, 72-76% win rates. Nothing derives those from the quotes
+ *   table, so the entire Analytics screen reads them back as if they were
+ *   findings. In a client's production database that is not sample data, it
+ *   is a fabricated report.
  */
 const DEMO_SEEDS = [
+  '20251009161528_seed_hierarchy_data_v2.sql',
+  '20251029142339_seed_analytics_data_v3.sql',
   '20251009175642_seed_historical_quote_data.sql',
   '20251009180011_add_more_historical_quotes_v2.sql',
   '20251009180038_comprehensive_historical_quotes.sql',
