@@ -1,5 +1,37 @@
 # Importing ITT data
 
+```bash
+export DATABASE_URL=postgres://user:pass@localhost:5432/pricespace
+
+node db/import/item-master.mjs  item-master.tsv
+node db/import/price-lists.mjs  pricelist-euro-oe.tsv     # once per list
+node db/import/customers.mjs    customer-master.tsv --parents customer-parent.tsv
+node db/import/quotes.mjs       quotes.tsv
+```
+
+Every importer takes `--dry-run`, which parses, validates and reports without
+writing. Run the item master and price lists before quotes, so quote lines
+resolve to real products instead of placeholders.
+
+## Part number namespaces
+
+Three identifiers appear across the files, and knowing which is which is what
+makes the imports join up:
+
+| Identifier | Format | Appears in |
+|---|---|---|
+| Manufacturer part number | `CIR06F-20-3P-F80` | Item Master (`Part Description`), price lists (`Description`), **quote extract** (`Part Number`) |
+| Internal global part number | `000000110` | Item Master (`Part Number`), price lists (`Global Manufacturing Part Number`) |
+| Unmatched | `067478-0004` | Sales Data only |
+
+`products.id` is therefore the **manufacturer** part number — the one quotes
+and price lists share. The internal number is kept in
+`attributes.global_part_number`, which is what ties a product back to the item
+master.
+
+Sales Data's item numbers are in a third format that matches neither, so sales
+history still cannot be tied to products. That one remains open with ITT.
+
 ## Quotes (ECIW extract)
 
 ```bash
@@ -83,27 +115,29 @@ Not yet imported. What the file shows, and what blocks each:
 |---|---|---|
 | Sales Data | Invoiced lines: order, invoice, customer, item, extended sell/cost, qty | Needs its own tables — these are invoices, not quotes |
 | Order Data | Distributor point-of-sale: part, cost, value, qty | Same; `CombinedCustName` packs end customer, distributor, branch, rep, city, state and postcode into one colon-delimited string that needs parsing |
-| Item Master | Part number, description, 4-level product family hierarchy | Importable; `Column1` and `item master` are spreadsheet lookup artifacts (`#N/A`) |
+| Item Master | Part number, description, 4-level product family hierarchy | **Imported** by `item-master.mjs`; `Column1` and `item master` are spreadsheet lookup artifacts (`#N/A`) |
 | Customer Master | site_name, customer no, name, industry classification, CorpMarket | See key mismatch below |
-| Customer Master2 | customer no, name, region, state, sales person, industry, channel | Matches the quote extract's customer numbers |
-| Parent | Customer no → corporate parent | Importable as a customer hierarchy |
+| Customer Master2 | customer no, name, region, state, sales person, industry, channel | **Imported** by `customers.mjs`; matches the quote extract's customer numbers |
+| Parent | Customer no → corporate parent | **Imported** by `customers.mjs --parents` |
 | Quotes | — | In that workbook this sheet is a duplicate of `Parent`; the real format is the ECIW extract above |
-| Price List Euro/NA × OE/Dist | Per-part price lists, 25 quantity-break slots | Importable; see below |
+| Price List Euro/NA × OE/Dist | Per-part price lists, 25 quantity-break slots | **Imported** by `price-lists.mjs`; see below |
 
-### Keys do not join across the files
+### What still does not join
 
-- The two customer masters share **no** customer numbers. `Customer Master`
-  uses `0010002740` / `0070000215`; `Customer Master2` uses `0000037414`. The
-  quote extract uses the `Customer Master2` form, so that is the quote-side
-  master — but `Sales Data` customer numbers (`0070000215`) match **neither**.
-- Part numbers likewise do not join: `Item Master` uses `000000050`,
-  `Sales Data` uses `067478-0004`, the price lists use `000-915640`, and the
-  quote extract uses `MDM-37SSM5-A174`. The quote and price-list forms look
-  like the same namespace (the price lists' `Description` column), while
-  `Item Master.Part Number` looks like an internal numeric id.
+Part numbers do join, via the two namespaces described above — an earlier
+reading of these files concluded they did not, which was wrong: the sample
+sheets hold disjoint sets of rows, not incompatible identifiers.
 
-A crosswalk between these identifiers is needed before sales history can be
-tied to products or customers.
+What genuinely does not join:
+
+- **Sales Data item numbers** (`067478-0004`) match neither the manufacturer
+  nor the internal part number format.
+- **Sales Data customer numbers** (`0070000215`) match neither customer
+  master. `Customer Master` uses `0010002740` / `0070000215`;
+  `Customer Master2` uses `0000037414`, which is the form the quote extract
+  uses and the one `customers.mjs` loads.
+
+So sales and order history cannot yet be tied to products or customers.
 
 ### Price lists
 
@@ -113,3 +147,27 @@ in `QC1..QC25` / `C1..C25`. Only 1–4 tiers are used in practice and the rest
 are zero-padding, which must be ignored rather than loaded as zero-priced
 breaks. `Class Code` is empty in all four. Currency is EUR for Europe and USD
 for North America.
+
+## Notes on the imports
+
+**Quantity-break padding.** Each price-list row has 25 tier slots; one to four
+are used and the rest are zero-filled. A zero quantity means "unused slot",
+not a break starting at zero, so the padding is discarded. Loading it would
+give every part dozens of zero-priced breaks and every quote would price at
+zero. Break boundaries are derived so each tier runs until the next begins,
+with the last left open-ended.
+
+**No cost basis.** A Distribution list's "cost" is what the distributor pays —
+ITT's revenue, not ITT's cost — so it loads as a price list and deliberately
+does not populate `products.base_cost`. Combined with `Booked Cost` being
+absent from nearly every quote line, there is currently no reliable cost basis
+in any extract, so margin figures cannot be computed from this data.
+
+**Multi-site customers.** A customer number can repeat, once per site, with
+different state, sales person and industry. Those collapse to one customer row
+and the extra sites are kept in `attributes.sites` rather than overwriting each
+other.
+
+**Family hierarchy.** Item Master's Product Family Level 1 is an internal
+coding string (`VO   VOCO VOCO10 5`); levels 2–4 are readable names. The
+hierarchy is built from levels 2 down, and level 1 is kept as an attribute.
