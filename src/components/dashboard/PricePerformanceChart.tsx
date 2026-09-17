@@ -1,44 +1,65 @@
 import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { trpc } from '../../lib/trpc';
+import type { DashboardChartFilters } from './DashboardFilters';
 
 interface PricePerformanceChartProps {
-  filters: {
-    productFamily: string;
-    timeframe: string;
-    region: string;
-    channel: string;
-  };
+  filters: DashboardChartFilters;
 }
 
+/**
+ * Average quoted price and average cost by month, both rebased to 100 at the
+ * first month with data.
+ *
+ * This was a hardcoded twelve-point series - Jan 100, Feb 102, Mar 105 and so
+ * on - multiplied by a constant keyed off the filter values. Changing a
+ * filter moved every point, which made it look connected to something; it
+ * never read the database at all.
+ */
 export function PricePerformanceChart({ filters }: PricePerformanceChartProps) {
-  const data = useMemo(() => {
-    const baseData = [
-      { date: 'Jan', priceIndex: 100, costIndex: 95, valueGap: 5 },
-      { date: 'Feb', priceIndex: 102, costIndex: 96, valueGap: 6 },
-      { date: 'Mar', priceIndex: 105, costIndex: 98, valueGap: 7 },
-      { date: 'Apr', priceIndex: 103, costIndex: 97, valueGap: 6 },
-      { date: 'May', priceIndex: 107, costIndex: 99, valueGap: 8 },
-      { date: 'Jun', priceIndex: 110, costIndex: 100, valueGap: 10 },
-      { date: 'Jul', priceIndex: 108, costIndex: 99, valueGap: 9 },
-      { date: 'Aug', priceIndex: 112, costIndex: 101, valueGap: 11 },
-      { date: 'Sep', priceIndex: 115, costIndex: 103, valueGap: 12 },
-      { date: 'Oct', priceIndex: 113, costIndex: 102, valueGap: 11 },
-      { date: 'Nov', priceIndex: 118, costIndex: 105, valueGap: 13 },
-      { date: 'Dec', priceIndex: 120, costIndex: 106, valueGap: 14 },
-    ];
+  const query = trpc.dashboard.pricePerformance.useQuery(filters);
 
-    const multiplier =
-      (filters.productFamily === 'hardware' ? 1.1 : 1) *
-      (filters.region === 'north-america' ? 1.05 : 1) *
-      (filters.channel === 'direct' ? 1.08 : 1);
+  const data = useMemo(
+    () =>
+      (query.data?.points ?? [])
+        .filter((point) => point.priceIndex !== null)
+        .map((point) => ({
+          date: new Date(`${point.month}-01T00:00:00Z`).toLocaleDateString('en-US', {
+            month: 'short',
+            year: '2-digit',
+            timeZone: 'UTC',
+          }),
+          priceIndex: point.priceIndex,
+          costIndex: point.costIndex,
+          valueGap: point.valueGap,
+        })),
+    [query.data]
+  );
 
-    return baseData.map(item => ({
-      ...item,
-      priceIndex: Math.round(item.priceIndex * multiplier),
-      costIndex: Math.round(item.costIndex * multiplier),
-      valueGap: Math.round(item.valueGap * multiplier),
-    }));
-  }, [filters]);
+  if (query.isLoading) {
+    return <p className="text-sm text-slate-500">Loading price performance...</p>;
+  }
+
+  if (query.isError) {
+    return <p className="text-sm text-red-600">{query.error.message}</p>;
+  }
+
+  if (data.length === 0) {
+    return (
+      <p className="text-sm text-slate-500">
+        No priced quote lines match these filters, so there is no series to index.
+      </p>
+    );
+  }
+
+  if (!query.data?.indexed) {
+    return (
+      <p className="text-sm text-slate-500">
+        The earliest month in range has no cost recorded, so the series cannot be
+        rebased to an index.
+      </p>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={350}>
