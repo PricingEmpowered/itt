@@ -18,7 +18,12 @@ const conn = await mysql.createConnection({
   user: url.username,
   password: url.password,
   database: url.pathname.slice(1),
-  ssl: { rejectUnauthorized: false },
+  // Only request TLS when the connection string asks for it. A managed
+  // database usually requires it; a local or on-premise MySQL often has
+  // none, and an unconditional request fails the handshake outright.
+  ...(/[?&]ssl=/.test(DB_URL) || process.env.DB_SSL === 'true'
+    ? { ssl: { rejectUnauthorized: false } }
+    : {}),
 });
 
 console.log("Connected to database");

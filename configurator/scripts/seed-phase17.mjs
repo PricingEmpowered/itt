@@ -13,7 +13,12 @@ function parseDbUrl(url) {
     host: u.hostname, port: parseInt(u.port || "3306"),
     user: u.username, password: u.password,
     database: u.pathname.slice(1),
-    ssl: { rejectUnauthorized: false },
+    // Only request TLS when the connection string asks for it. A managed
+  // database usually requires it; a local or on-premise MySQL often has
+  // none, and an unconditional request fails the handshake outright.
+  ...(/[?&]ssl=/.test(DB_URL) || process.env.DB_SSL === 'true'
+    ? { ssl: { rejectUnauthorized: false } }
+    : {}),
   };
 }
 
