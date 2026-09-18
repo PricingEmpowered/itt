@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/dataClient';
+import { trpcClient } from '../lib/trpcClient';
 import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 
@@ -48,37 +49,30 @@ export function PriceGuidance({ productId, unitPrice, discount, customerId }: Pr
         currentCustomerSegment = currentCustomer?.segment;
       }
 
-      const { data: quoteLines, error: queryError } = await db
-        .from('quote_lines')
-        .select(`
-          unit_price,
-          quantity,
-          quotes!inner(
-            created_at,
-            status,
-            customers!inner(
-              name,
-              segment
-            )
-          )
-        `)
-        .eq('product_id', productId)
-        .in('quotes.status', ['Approved', 'Rejected']);
-
-      if (queryError) {
-        console.error('Query error:', queryError);
+      /*
+       * Fetched through the API. This was an embedded select filtering on
+       * `quotes.status`, which the compatibility layer cannot serve, so the
+       * query failed on every call and the panel rendered empty -- the same
+       * fault that kept deal scoring from ever running.
+       */
+      let quoteLines: any[] = [];
+      try {
+        quoteLines = (await trpcClient.quotes.peerPrices.query({ productId })) as any[];
+      } catch (queryError) {
+        console.error('Error loading peer prices:', queryError);
         setPeerPrices([]);
         setLoading(false);
         return;
       }
 
       if (quoteLines && quoteLines.length > 0) {
+        /* Flat columns now, rather than the nested shape an embed returned. */
         const peerData: PeerPrice[] = quoteLines.map((line: any) => ({
-          customer_name: line.quotes.customers.name,
-          customer_segment: line.quotes.customers.segment,
-          unit_price: parseFloat(line.unit_price),
+          customer_name: line.customer_name ?? 'Unknown',
+          customer_segment: line.customer_segment ?? null,
+          unit_price: Number(line.unit_price),
           quantity: line.quantity,
-          quote_date: line.quotes.created_at,
+          quote_date: line.created_at,
         }));
 
         let relevantPrices = peerData;

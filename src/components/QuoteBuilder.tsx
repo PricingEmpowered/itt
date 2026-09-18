@@ -459,7 +459,42 @@ export function QuoteBuilder() {
         }
       }
 
-      alert(`Quote ${quoteId} created successfully!`);
+      /*
+       * Submit for approval. Until now a saved quote sat at Draft with
+       * approvals_required 0 and nothing was ever added to the queue, so a
+       * deep discount reached a customer with no review at all.
+       *
+       * The server recomputes discount, value and margin from the quote's own
+       * lines and decides the level; nothing here is trusted for routing.
+       */
+      let outcome: string;
+      try {
+        const submission = await trpcClient.quotes.submitForApproval.mutate({ quoteId });
+        const f = submission.financials;
+        const margin =
+          f.marginPercent === null ? 'margin unknown' : `${f.marginPercent.toFixed(1)}% margin`;
+
+        outcome =
+          submission.requiredLevel === 0
+            ? `Quote ${quoteId} created and sent.\n\n` +
+              `${f.discountPercent.toFixed(1)}% discount, ${margin} — within all approval thresholds.`
+            : `Quote ${quoteId} created and submitted for approval.\n\n` +
+              `${f.discountPercent.toFixed(1)}% discount, ${margin} — needs level ` +
+              `${submission.requiredLevel} approval.`;
+
+        if (submission.notes.length > 0) outcome += `\n\n${submission.notes.join('\n')}`;
+      } catch (submitError) {
+        /*
+         * The quote is saved either way. Routing failing must not look like
+         * the save failing, or someone re-enters it and creates a duplicate.
+         */
+        console.error('Error submitting for approval:', submitError);
+        outcome =
+          `Quote ${quoteId} was saved, but could not be submitted for approval.\n\n` +
+          `It is in Draft and will not reach the approval queue until it is resubmitted.`;
+      }
+
+      alert(outcome);
       setQuoteLines([]);
       setServiceLines([]);
       setSelectedCustomer('');

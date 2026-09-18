@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc.js';
 import { calculateDealScore } from '../dealScore.js';
+import { decideApproval, quoteFinancials, submitForApproval } from '../approvals.js';
 
 /*
  * json_agg over a LEFT JOIN would produce `[null]` for a quote with no
@@ -113,6 +114,145 @@ export const quotesRouter = router({
     )
     .query(({ ctx, input }) =>
       ctx.withDb((db) => calculateDealScore(db, input.customerId, input.lines))
+    ),
+
+  /*
+   * What a quote's approval would require, without submitting it. Lets the
+   * quote builder warn before Save rather than after.
+   */
+  approvalPreview: protectedProcedure
+    .input(z.object({ quoteId: z.string().min(1).max(100) }))
+    .query(({ ctx, input }) =>
+      ctx.withDb(async (db) => {
+        const financials = await quoteFinancials(db, input.quoteId);
+        const { rows } = await db.query<{ level: number }>(
+          'SELECT determine_approval_level($1, $2, $3) AS level',
+          [financials.discountPercent, financials.total, financials.marginPercent]
+        );
+        return { financials, requiredLevel: Number(rows[0]?.level ?? 0) };
+      })
+    ),
+
+  /*
+   * Submission recomputes the financials from the quote's own lines, so the
+   * routing cannot be influenced by what the browser claims. See
+   * server/approvals.ts.
+   */
+  submitForApproval: protectedProcedure
+    .input(z.object({ quoteId: z.string().min(1).max(100) }))
+    .mutation(({ ctx, input }) =>
+      ctx.withDb((db) => submitForApproval(db, input.quoteId, ctx.user.id))
+    ),
+
+  decideApproval: protectedProcedure
+    .input(
+      z.object({
+        approvalRequestId: z.string().min(1).max(200),
+        action: z.enum(['approved', 'rejected']),
+        comments: z.string().max(4000).nullable().default(null),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.withDb((db) =>
+        decideApproval(db, input.approvalRequestId, ctx.user.id, input.action, input.comments)
+      )
+    ),
+
+  /*
+   * Comparable prices for one product, for the price guidance panel.
+   *
+   * This and winRate below replace browser queries that embedded
+   * `quotes!inner(status)` and filtered on `quotes.status`. The compatibility
+   * layer cannot serve embedded selects, so both failed on every call and the
+   * features were silently dead -- the same fault that kept deal scoring from
+   * ever running. PriceGuidance logged the error and rendered an empty panel;
+   * win probability swallowed it and returned a hardcoded 0.5.
+   */
+  peerPrices: protectedProcedure
+    .input(z.object({ productId: z.string().min(1).max(200) }))
+    .query(({ ctx, input }) =>
+      ctx.withDb(async (db) => {
+        const { rows } = await db.query(
+          `SELECT ql.unit_price,
+                  ql.quantity,
+                  ql.discount_applied,
+                  q.created_at,
+                  q.status,
+                  c.name    AS customer_name,
+                  c.segment AS customer_segment
+             FROM quote_lines ql
+             JOIN quotes    q ON q.id = ql.quote_id
+             LEFT JOIN customers c ON c.id = q.customer_id
+            WHERE ql.product_id = $1
+              AND q.status IN ('Approved', 'Rejected')
+              AND ql.unit_price IS NOT NULL
+            ORDER BY q.created_at DESC
+            LIMIT 500`,
+          [input.productId]
+        );
+        return rows;
+      })
+    ),
+
+  /*
+   * Historical win rates for the win-probability model. The discount band
+   * reads `discount_applied`; the browser version asked for `discount_percent`,
+   * which is not a column on quote_lines, so it could not have worked even
+   * with the embedding fixed.
+   *
+   * "Won" is approximated by Approved and "lost" by Rejected, because ITT's
+   * extract carries no outcome. Once outcome arrives this should read it
+   * instead: an approved quote is not a won one.
+   */
+  winRate: protectedProcedure
+    .input(
+      z.object({
+        discountPercent: z.number().nullable().default(null),
+        quoteTotal: z.number().nullable().default(null),
+      })
+    )
+    .query(({ ctx, input }) =>
+      ctx.withDb(async (db) => {
+        const byDiscount =
+          input.discountPercent === null
+            ? null
+            : (
+                await db.query<{ approved: string; total: string }>(
+                  `SELECT count(*) FILTER (WHERE q.status = 'Approved') AS approved,
+                          count(*)                                      AS total
+                     FROM quote_lines ql
+                     JOIN quotes q ON q.id = ql.quote_id
+                    WHERE q.status IN ('Approved', 'Rejected')
+                      AND ql.discount_applied BETWEEN $1 AND $2`,
+                  [Math.max(0, input.discountPercent - 5), input.discountPercent + 5]
+                )
+              ).rows[0];
+
+        const bySize =
+          input.quoteTotal === null
+            ? null
+            : (
+                await db.query<{ approved: string; total: string }>(
+                  `SELECT count(*) FILTER (WHERE status = 'Approved') AS approved,
+                          count(*)                                    AS total
+                     FROM quotes
+                    WHERE status IN ('Approved', 'Rejected')
+                      AND total BETWEEN $1 AND $2`,
+                  [input.quoteTotal * 0.7, input.quoteTotal * 1.3]
+                )
+              ).rows[0];
+
+        /* No comparable history means no opinion, which is not 50%. */
+        const rate = (r: { approved: string; total: string } | null | undefined) => {
+          if (!r || Number(r.total) === 0) return null;
+          return Number(r.approved) / Number(r.total);
+        };
+
+        return {
+          byDiscount: { rate: rate(byDiscount), sample: Number(byDiscount?.total ?? 0) },
+          bySize: { rate: rate(bySize), sample: Number(bySize?.total ?? 0) },
+        };
+      })
     ),
 
   count: protectedProcedure.query(({ ctx }) =>

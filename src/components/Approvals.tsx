@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getCurrentUser } from '../lib/currentUser';
 import { db } from '../lib/dataClient';
+import { trpcClient } from '../lib/trpcClient';
 import { Quote, Customer } from '../types';
 import { CheckCircle, XCircle, AlertCircle, TrendingUp, Shield, Users, DollarSign, Percent, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
@@ -152,59 +153,19 @@ export function Approvals() {
 
       const comments = commentText[approval.id] || (approved ? 'Approved' : 'Rejected');
 
-      await db
-        .from('approval_requests')
-        .update({
-          status: approved ? 'Approved' : 'Rejected',
-          approved_by: userData.user.id,
-          approved_at: new Date().toISOString(),
-          comments: comments,
-        })
-        .eq('id', approval.id);
-
-      await db.from('approval_history').insert({
-        quote_id: approval.quote_id,
-        approval_request_id: approval.id,
-        approval_level: approval.approval_level_required,
+      /*
+       * Decided through the API, not by writing the rows here. The server
+       * re-checks that this approver has the authority the quote needs and
+       * that they are not approving their own submission; a direct table
+       * write could do neither, and hiding a button is not a permission
+       * check. See server/approvals.ts.
+       */
+      await trpcClient.quotes.decideApproval.mutate({
+        approvalRequestId: approval.id,
         action: approved ? 'approved' : 'rejected',
-        actioned_by: userData.user.id,
-        actioned_by_role: userProfile.role,
-        actioned_by_level: userProfile.approval_level,
-        comments: comments,
-        quote_total: approval.quote_total,
-        quote_discount_percent: approval.quote_discount_percent,
-        quote_margin_percent: approval.quote_margin_percent,
+        comments,
       });
 
-      const quote = quotes.find(q => q.id === approval.quote_id);
-      if (approved && quote) {
-        const pendingApprovals = approvals.filter(
-          a => a.quote_id === approval.quote_id && a.status === 'Pending' && a.id !== approval.id
-        );
-
-        if (pendingApprovals.length === 0) {
-          await db
-            .from('quotes')
-            .update({
-              status: 'Approved',
-              current_approval_level: approval.approval_level_required
-            })
-            .eq('id', approval.quote_id);
-        } else {
-          await db
-            .from('quotes')
-            .update({ current_approval_level: approval.approval_level_required })
-            .eq('id', approval.quote_id);
-        }
-      } else if (!approved) {
-        await db
-          .from('quotes')
-          .update({ status: 'Rejected' })
-          .eq('id', approval.quote_id);
-      }
-
-      alert(`Quote ${approved ? 'approved' : 'rejected'} successfully`);
-      setCommentText({ ...commentText, [approval.id]: '' });
       loadData();
     } catch (error) {
       console.error('Error processing approval:', error);
