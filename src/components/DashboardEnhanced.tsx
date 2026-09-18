@@ -155,7 +155,14 @@ export function DashboardEnhanced() {
         metric: 'revenue'
       },
       {
-        title: 'Win Rate',
+        /*
+         * `win_rate_12m` is approved / (approved + rejected) -- a decision
+         * made inside ITT, not by the customer. Won and lost live in
+         * quotes.outcome, which no source extract populates yet, so calling
+         * this a win rate would put a number in front of a sales manager
+         * that means something else entirely.
+         */
+        title: 'Approval Rate',
         value: `${metrics.win_rate_12m.toFixed(1)}%`,
         change: formatChange(winRateChange),
         isPositive: winRateChange >= 0,

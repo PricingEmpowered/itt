@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BarChart3, TrendingUp, Filter, Layers } from 'lucide-react';
+import { AggregateFreshness } from './analytics/AggregateFreshness';
 import { BusinessPerformance } from './analytics/BusinessPerformance';
 import { ListPricePerformance } from './analytics/ListPricePerformance';
 import { QuoteFunnelAnalysis } from './analytics/QuoteFunnelAnalysis';
@@ -23,6 +24,8 @@ export function Analytics() {
           </div>
         </div>
       </div>
+
+      <AggregateFreshness />
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
         <div className="border-b border-slate-200">

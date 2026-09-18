@@ -68,6 +68,13 @@ export const ENV = {
   llmApiKey: process.env.LLM_API_KEY ?? null,
 
   /**
+   * How often the pre-aggregated analytics are rebuilt, in minutes. Zero
+   * disables the in-process schedule for an install that drives the refresh
+   * from its own scheduler after a nightly ERP load.
+   */
+  aggregateRefreshMinutes: optionalNumber('AGGREGATE_REFRESH_MINUTES', 60),
+
+  /**
    * Where uploaded documents are written. Only metadata lives in the
    * database; the bytes live here on the server's own disk.
    */

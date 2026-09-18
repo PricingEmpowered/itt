@@ -231,9 +231,15 @@ export function BusinessPerformance() {
               iconColor="text-blue-600"
               iconBg="bg-blue-50"
             />
+            {/*
+              * Labelled "Approval Rate" because that is what the column
+              * holds: approved / (approved + rejected) is a decision made
+              * inside ITT, not by the customer. Win and loss come from
+              * quotes.outcome, which no source extract populates yet.
+              */}
             <KPICard
               icon={<Award size={24} />}
-              label="Win Rate"
+              label="Approval Rate"
               value={`${metrics.win_rate}%`}
               change={metrics.win_rate_change_pct}
               iconColor="text-yellow-600"

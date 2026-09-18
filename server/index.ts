@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
+import { startAggregateSchedule, stopAggregateSchedule } from './aggregates.js';
 import { registerAiAnalyticsRoutes } from './aiAnalytics.js';
 import { registerCurrencyRoutes } from './currencyRates.js';
 import { closePool, pool } from './db.js';
@@ -69,6 +70,8 @@ async function main() {
     });
   }
 
+  startAggregateSchedule();
+
   const server = app.listen(ENV.port, () => {
     console.log(`Price Space API listening on http://localhost:${ENV.port}`);
     if (!ENV.isProduction) {
@@ -80,6 +83,7 @@ async function main() {
   // a restart under systemd does not drop live requests.
   const shutdown = (signal: string) => {
     console.log(`\n${signal} received, shutting down.`);
+    stopAggregateSchedule();
     server.close(async () => {
       await closePool();
       process.exit(0);

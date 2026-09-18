@@ -82,6 +82,36 @@ const CHART_SCOPE = `
   AND ($4::text IS NULL OR cu.segment = $4)
 `;
 
+/*
+ * The same predicate against `mv_pricing_monthly`, whose columns are already
+ * the dimensions rather than joins to reach them.
+ *
+ * Two differences from the raw form, both deliberate:
+ *
+ *  - The period is rounded to whole months, because that is the grain the
+ *    view is built at. A 365-day window therefore starts at the beginning of
+ *    the month 365 days ago instead of mid-month, which removes a partial
+ *    first bucket from an index chart rather than adding one.
+ *
+ *  - Only finalised quotes are counted. The raw form included drafts, so a
+ *    rep opening a quote and typing a price moved the company price index.
+ *    A draft is not a price anyone agreed to.
+ */
+const MV_CHART_SCOPE = `
+  m.month >= date_trunc('month', now() - make_interval(days => $1))::date
+  AND ($2::text IS NULL OR m.family_id IN (
+        WITH RECURSIVE subtree AS (
+          SELECT id FROM product_families WHERE id = $2
+          UNION ALL
+          SELECT f.id FROM product_families f
+            JOIN subtree s ON f.parent_family_id = s.id
+        )
+        SELECT id FROM subtree
+      ))
+  AND ($3::text IS NULL OR m.region = $3)
+  AND ($4::text IS NULL OR m.channel = $4)
+`;
+
 const chartParams = (f: ChartFilters) => [f.periodDays, f.familyId, f.region, f.channel];
 
 export const dashboardRouter = router({
@@ -147,19 +177,27 @@ export const dashboardRouter = router({
         avg_cost: string | null;
         lines: string;
       }>(
-        `SELECT to_char(date_trunc('month', q.created_at), 'YYYY-MM') AS month,
-                avg(ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100))
+        /*
+         * Served from mv_pricing_monthly. The raw form scanned quote_lines
+         * under row-level security, which at three million lines took about
+         * five seconds just to count the rows before aggregating any of them.
+         *
+         * The bucket averages are recombined by weight, not averaged again:
+         * avg(avg) would give a month with one line the same say as a month
+         * with a thousand. Price and cost carry separate weights because a
+         * line can have a price without a cost.
+         */
+        `SELECT to_char(m.month, 'YYYY-MM')                                 AS month,
+                sum(m.avg_price * m.priced_lines) / NULLIF(sum(m.priced_lines), 0)
                   AS avg_price,
-                avg(COALESCE(ql.booked_cost, p.base_cost))            AS avg_cost,
-                count(*)                                             AS lines
-           FROM quote_lines ql
-           JOIN quotes    q  ON q.id  = ql.quote_id
-           JOIN products  p  ON p.id  = ql.product_id
-           JOIN customers cu ON cu.id = q.customer_id
-          WHERE ${CHART_SCOPE}
-            AND ql.unit_price IS NOT NULL
-          GROUP BY 1
-          ORDER BY 1`,
+                sum(m.avg_cost  * m.costed_lines) / NULLIF(sum(m.costed_lines), 0)
+                  AS avg_cost,
+                sum(m.priced_lines)                                        AS lines
+           FROM mv_pricing_monthly m
+          WHERE ${MV_CHART_SCOPE}
+          GROUP BY m.month
+         HAVING sum(m.priced_lines) > 0
+          ORDER BY m.month`,
         chartParams(input)
       );
 
@@ -323,62 +361,28 @@ export const dashboardRouter = router({
           realization: string | null;
           revenue: string | null;
         }>(
-          `WITH best_list AS (
-             /*
-              * One row per product, computed once. This was two correlated
-              * subqueries evaluated per line, which at three million lines
-              * meant a million executions each and took the query from 1.4
-              * seconds to 8.4.
-              */
-             SELECT product_id, max(list_price) AS list_price
-               FROM price_list_items GROUP BY product_id
-           ),
-           priced AS (
-             SELECT COALESCE(ql.discount_applied, 0)            AS discount,
-                    COALESCE(ql.quantity, 1)                    AS qty,
-                    COALESCE(ql.booked_cost, p.base_cost)       AS cost,
-                    COALESCE(pl.list_price, bl.list_price)      AS list_price,
-                    ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100)
-                      AS effective
-               FROM quote_lines ql
-               JOIN quotes   q ON q.id = ql.quote_id
-               JOIN products p ON p.id = ql.product_id
-               LEFT JOIN best_list bl
-                 ON bl.product_id = ql.product_id
-               LEFT JOIN price_list_items pl
-                 ON pl.product_id = ql.product_id
-                AND pl.price_list_id = q.price_list_id
-              WHERE q.created_at >= now() - make_interval(days => $1)
-                AND ql.unit_price IS NOT NULL
-                AND ql.unit_price > 0
-           ),
-           /* Lines in the window regardless of whether they carry a price. */
-           total AS (
-             SELECT count(*) AS lines
-               FROM quote_lines ql
-               JOIN quotes q ON q.id = ql.quote_id
-              WHERE q.created_at >= now() - make_interval(days => $1)
-           )
-           /*
-            * One pass with FILTER rather than a scalar subquery per metric.
-            * Six subqueries over the same CTE meant six scans of it.
-            */
-           SELECT (SELECT lines FROM total)                        AS lines,
-                  count(*)                                         AS priced_lines,
-                  count(*) FILTER (WHERE cost IS NOT NULL AND cost > 0)
-                                                                   AS costed_lines,
-                  count(*) FILTER (WHERE list_price IS NOT NULL AND list_price > 0)
-                                                                   AS listed_lines,
-                  avg(discount)                                    AS avg_discount,
-                  avg((effective - cost) / effective * 100)
-                    FILTER (WHERE cost IS NOT NULL AND cost > 0 AND effective > 0)
-                                                                   AS avg_margin,
-                  sum(effective * qty) FILTER (WHERE list_price IS NOT NULL AND list_price > 0)
-                    / NULLIF(sum(list_price * qty)
-                        FILTER (WHERE list_price IS NOT NULL AND list_price > 0), 0)
-                    * 100                                          AS realization,
-                  sum(effective * qty)                             AS revenue
-             FROM priced`,
+          /*
+           * Served from mv_pricing_monthly. The raw form scanned every quote
+           * line in the window under row-level security and took 3.7 seconds
+           * at three million lines, on the first screen after sign-in.
+           *
+           * avg_discount and avg_margin are means of per-LINE values, so they
+           * are recombined from stored sums and counts rather than averaged
+           * across buckets. Realization divides the quoted value of listed
+           * lines by their list value, both accumulated over the same lines.
+           */
+          `SELECT sum(m.lines)                                          AS lines,
+                  sum(m.priced_lines)                                   AS priced_lines,
+                  sum(m.costed_lines)                                   AS costed_lines,
+                  sum(m.listed_lines)                                   AS listed_lines,
+                  sum(m.discount_sum)   / NULLIF(sum(m.lines), 0)       AS avg_discount,
+                  sum(m.margin_pct_sum) / NULLIF(sum(m.margin_pct_lines), 0)
+                                                                        AS avg_margin,
+                  sum(m.listed_revenue) / NULLIF(sum(m.list_value), 0) * 100
+                                                                        AS realization,
+                  sum(m.revenue)                                        AS revenue
+             FROM mv_pricing_monthly m
+            WHERE m.month >= date_trunc('month', now() - make_interval(days => $1))::date`,
           [days]
         );
 

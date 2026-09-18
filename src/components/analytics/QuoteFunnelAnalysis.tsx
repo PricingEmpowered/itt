@@ -9,7 +9,7 @@ interface FunnelData {
   quote_count: number;
   quote_value: number;
   average_value: number;
-  win_rate: number;
+  win_rate: number | null;
   average_cycle_time_days: number;
 }
 
@@ -86,9 +86,20 @@ export function QuoteFunnelAnalysis() {
     repeatBusinessData.reduce((sum, d) => sum + d.quote_count, 0);
   const totalValue = newTotal + repeatTotal;
 
-  const newWinRate = newBusinessData.find(d => d.stage === 'technical_review')?.win_rate || 0;
-  const repeatWinRate = repeatBusinessData.find(d => d.stage === 'technical_review')?.win_rate || 0;
-  const avgWinRate = ((newWinRate + repeatWinRate) / 2);
+  /*
+   * `win_rate` is NULL unless `quotes.outcome` is populated. Approved and
+   * Rejected are internal approval decisions, not customer wins and losses,
+   * so a missing outcome must read as unknown rather than as 0%: a sales
+   * manager shown "0.0%" would take it as a measurement.
+   */
+  const newWinRate = newBusinessData.find(d => d.stage === 'technical_review')?.win_rate ?? null;
+  const repeatWinRate = repeatBusinessData.find(d => d.stage === 'technical_review')?.win_rate ?? null;
+  const avgWinRate =
+    newWinRate !== null && repeatWinRate !== null
+      ? (newWinRate + repeatWinRate) / 2
+      : newWinRate ?? repeatWinRate;
+  const pct = (value: number | null) =>
+    value === null ? 'Not recorded' : `${value.toFixed(1)}%`;
 
   const newCycleTime = newBusinessData.find(d => d.stage === 'technical_review')?.average_cycle_time_days || 0;
   const repeatCycleTime = repeatBusinessData.find(d => d.stage === 'technical_review')?.average_cycle_time_days || 0;
@@ -114,8 +125,12 @@ export function QuoteFunnelAnalysis() {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="text-sm text-slate-600 mb-2">Average Win Rate</div>
-          <div className="text-3xl font-bold text-slate-900">{avgWinRate.toFixed(1)}%</div>
-          <div className="text-xs text-slate-500 mt-1">Across all segments</div>
+          <div className={`text-3xl font-bold ${avgWinRate === null ? 'text-slate-400 italic' : 'text-slate-900'}`}>
+            {pct(avgWinRate)}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            {avgWinRate === null ? 'No quote outcomes captured' : 'Across all segments'}
+          </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="text-sm text-slate-600 mb-2">Average Cycle Time</div>
@@ -124,8 +139,12 @@ export function QuoteFunnelAnalysis() {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="text-sm text-slate-600 mb-2">Conversion Rate</div>
-          <div className="text-3xl font-bold text-slate-900">{avgWinRate.toFixed(1)}%</div>
-          <div className="text-xs text-slate-500 mt-1">Quote to order</div>
+          <div className={`text-3xl font-bold ${avgWinRate === null ? 'text-slate-400 italic' : 'text-slate-900'}`}>
+            {pct(avgWinRate)}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            {avgWinRate === null ? 'No quote outcomes captured' : 'Quote to order'}
+          </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
@@ -251,13 +270,15 @@ export function QuoteFunnelAnalysis() {
               <tr className="border-b border-slate-100">
                 <td className="py-3 px-4 text-sm text-slate-600">Win Rate</td>
                 <td className="py-3 px-4 text-sm text-slate-900 text-right">
-                  {newWinRate.toFixed(1)}%
+                  {pct(newWinRate)}
                 </td>
                 <td className="py-3 px-4 text-sm text-slate-900 text-right">
-                  {repeatWinRate.toFixed(1)}%
+                  {pct(repeatWinRate)}
                 </td>
                 <td className="py-3 px-4 text-sm text-green-600 text-right font-medium">
-                  +{(repeatWinRate - newWinRate).toFixed(1)}%
+                  {newWinRate === null || repeatWinRate === null
+                    ? '\u2014'
+                    : `${repeatWinRate - newWinRate >= 0 ? '+' : ''}${(repeatWinRate - newWinRate).toFixed(1)}%`}
                 </td>
               </tr>
               <tr>
