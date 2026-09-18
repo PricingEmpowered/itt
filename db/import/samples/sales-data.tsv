@@ -1,0 +1,5 @@
+Business Unit	Order No	Invoice Number	Invoice Date	Customer No	customer_sold_to	item_number	Item Category	Billing Type	Extended Sell (USD)	Extended Cost (USD)	Qty Sold	UOM	document_currency	customer part	customer_group_description
+IRNO	0000283820	0009064905	1/2/2024	0070000215	HONEYWELL INC	067478-0004	Rework Item	Invoice	0.009	9477	9	EA	USD	53501621-1	OEM                 
+IRNO	0000279192	0009064906	1/2/2024	0070001117	TTM TECHNOLOGIES, INC.	140258-0002	Standard Item	Invoice	28251.89	9722.571	67	EA	USD	4089219-2	OEM                 
+IRNO	0000281055	0009064907	1/2/2024	0070002643	NEWARK ELECTRONICS-GAFFNEY	096512-0064	Standard Item	Invoice	881.4	221.48	10	EA	USD	38P0932	Distribution        
+IRNO	0000281751	0009064917	1/2/2024	0070007631	MASTER ELECTRONICS	042940-0139	Standard Item	Invoice	98812.98	15518.034	189	EA	USD	DPKA-51PG-7	Distribution

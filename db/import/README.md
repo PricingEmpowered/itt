@@ -107,6 +107,79 @@ EUROPE BV) among North American ones, so quotes are presumably not all USD, but
 the extract carries no currency column. Imported quotes leave `currency_id`
 unset.
 
+## Identifier namespaces across the extracts
+
+Samples of Sales Data and the site-scoped Customer Master arrived after the
+first import was built, and they do not share identifiers with what is already
+loaded. This is the single largest open question on the data.
+
+**Customer numbers are scoped to a site, not global.** The site file makes the
+pattern explicit:
+
+| Source | `site_name` / Business Unit | Prefix | Example |
+|---|---|---|---|
+| Customer Master | Weinstadt | `001` | `0010002740` |
+| Customer Master | IRNO | `007` | `0070931526` |
+| Sales Data | IRNO | `007` | `0070000215` |
+| Customer Master2 | — (not carried) | `000` | `0000037414` |
+| Quote extract | — (not carried) | `000` | `0000071275` |
+
+So Sales Data joins to the IRNO rows of the Customer Master, and the quote
+extract joins to Customer Master2 — which it already does; that import works.
+What is unresolved is whether `000` is a third site or a second numbering of
+the same customers. **If ITT's quoting system numbers customers differently
+from its invoicing system, quotes and invoices cannot be linked at all**, which
+removes win rate by band position and every quote-to-invoice measure.
+
+The practical consequence for the schema: a customer key is
+`(site, customer_no)`, not `customer_no`. `customers.id` is currently the bare
+number and would collide the moment a second site is loaded.
+
+**Part numbers show three shapes.** Nine digits is one namespace; Sales Data is
+not in it.
+
+| Source | Shape | Example |
+|---|---|---|
+| Item master | 9 digits | `000000050` |
+| Price lists | 9 digits (one row dashed) | `000000110`, `000-915640` |
+| Sales Data | 6 digits + dash + 4 | `067478-0004` |
+| Quote extract | alphanumeric | `MDM-37SSM5-A174` |
+
+Ten digits do not become nine by trimming or padding, so these are different
+identifiers rather than different formatting. The likely explanation is that
+Sales Data carries base-plus-dash (`067478` + variant `0004`) while the master
+carries a flat key, but that is a guess and needs confirming rather than
+assuming — an earlier reading of these files called a join wrong in the other
+direction, and the sample row sets are disjoint, so overlap counts prove
+nothing either way.
+
+Until this is settled, invoice lines cannot be joined to list price, which is
+what section 4 of the target pricing specification computes realization from.
+
+## Data issues found in the Sales Data sample
+
+**Zero-price lines are real and destroy averages.** One of four sample rows is
+a `Rework Item` billed at $0.009 against $9,477 of cost — a no-charge rework.
+Its line margin is -105,299,900%. The target pricing specification already
+calls for excluding zero-price lines, returns and credit memos (section 2.4);
+this row is why that rule is not optional. `Billing Type` is the column to
+exclude on, and only the value `Invoice` appears so far.
+
+**Distribution shows higher margin than OEM in the sample.** 74.9% and 84.3%
+against 65.6%. Three rows prove nothing, but it is worth establishing whether
+`Extended Sell` to a distributor is what ITT invoices the distributor or the
+distributor's resale, because the two give opposite readings of channel
+profitability.
+
+**Fields the specification needs and Sales Data does not carry:** ship-to,
+order type beyond `Item Category` (Standard / Rework), SPA identifier and
+debit amount. Without the last two, ship-and-debit cannot be matched to POS
+and pocket price stops at invoice price.
+
+**Formatting:** `customer_group_description` is space-padded to a fixed width
+and needs trimming. `Extended Cost` carries three decimals on some rows and
+none on others. Dates are `M/D/YYYY`, as in the quote extract.
+
 ## Structure of the other files (`Compiled_Structure.xlsx`)
 
 Not yet imported. What the file shows, and what blocks each:
