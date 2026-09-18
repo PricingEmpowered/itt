@@ -444,6 +444,105 @@ cost**, so if it is extended, every margin and every deal score computed from a
 quote is wrong by a factor of the minimum quantity. Confirm with ITT before
 loading volume.
 
+## What the SPA sample rows settle
+
+Five item rows and four headers, verified rather than inferred. Subset of the
+fields kept in `samples/spa-items-subset.tsv`; the full rows carry ~250
+columns.
+
+### ITT computes margin on price, not markup on cost
+
+`MARGIN_n` reconciles exactly against `COST_ESTIMATED` on all eight priced
+tiers across three quotes:
+
+> **margin % = (PRICE_GIVEN_OEM − COST_ESTIMATED) ÷ PRICE_GIVEN_OEM × 100**
+
+| Quote | Tier price | COST_ESTIMATED | Stated margin | (p−c)/p | (p−c)/c |
+|---|---|---|---|---|---|
+| SP681664 | 39.14 | 18.87 | 51.8 | **51.79** | 107.42 |
+| SP681965 | 44.90 | 22.50 | 49.9 | **49.89** | 99.56 |
+| SP681820 | 280.00 | 56.70 | 79.8 | **79.75** | 393.83 |
+
+This answers the open question from the algorithms write-up. The strawman's
+cost-plus path computes `cost × (1 + margin)`, which is a markup and delivers
+28.6% where 40% was intended. **ITT's own system does not work that way**, so
+that defect should be fixed to divide rather than multiply, and it is no longer
+a question of intent.
+
+`COST_ESTIMATED` is a **unit** cost. `BOOK_COST` is something else — 402.39
+against a `COST_ESTIMATED` of 56.70 on the same line, and not a multiple of the
+quantity — so the two are not interchangeable and `BOOK_COST` needs its own
+definition from ITT.
+
+### DISCOUNT_n is tier-over-tier, not discount off list
+
+| Quote | Tier | Stated | vs previous tier | vs tier 1 |
+|---|---|---|---|---|
+| SP681664 | 3 | −11.8 | **−11.84** | −19.14 |
+| SP681965 | 3 | −4.7 | **−4.75** | −9.29 |
+
+It measures the price step down from the tier above. Anything reading it as a
+discount from list will be wrong. `TOTAL_VALUE_n` is simply
+`QTY_MOQ_n × PRICE_GIVEN_OEM_n`, confirmed on all eight tiers.
+
+### The two systems normalise part numbers differently
+
+Plain uppercase-and-strip-punctuation reproduces the SPA system's `_ALPHA_NUM`
+fields on 11 of 11, including the awkward case:
+
+```
+FRCIR06R16S-8P-F80T89-VO-M20-1.5F-ZM  ->  FRCIR06R16S8PF80T89VOM2015FZM
+```
+
+The decimal point in `1.5F` is dropped, and **the `VO` keeps its letter O**.
+The price list's `Stripped Description` does not agree:
+
+```
+CIR01A-20-3P-F80-VO  ->  CIR01A203PF80V0      (digit zero)
+```
+
+So the SPA system and the price list disagree on the same suffix. **The
+stripped forms are not directly joinable across sources**, and one of the two
+is wrong. Worth raising with ITT, because it decides whether the join needs a
+reconciliation step or just a shared function.
+
+### Other things the rows show
+
+- **`PART_NO_MANUF` is the internal number.** `121571-1155`, `121537-1062` —
+  the same six-plus-four shape as Booking's `Item Number` and Sales Data's
+  `item_number`. So the SPA view carries both namespaces, like Booking does.
+- **Distributor and end customer both appear.** `DIST_NAME` = Avnet US with
+  `CUST_NAME` = Rockwell Collins, which is §3.1's "franchised distribution,
+  end customer known" handed over directly.
+- **`ITT_SITE_DESCR` spans Weinstadt, Lainate, IRNO and Hong Kong** on four
+  quotes. This is a multi-site business and the pricing model has to account
+  for it.
+- **`OPP_CATEGORIES_DESCR`** carries `Bid for Bid` and `Bid for Buy` — usable
+  for §3.2's competitive exposure.
+- **`CUST_ID` uses the `001` prefix** on the Weinstadt and Lainate quotes,
+  which fits the site-scoped numbering already recorded.
+- **Rejections carry a reason.** One line is `Rejected` with
+  `REJECT_REASON_DESCR` = "Other (Specify in comments)" and
+  `COMMENTS_FACTORY` = "371-0701-050 is not on file with ITT."
+
+### A parsing hazard
+
+`COMMENTS_INTERNAL` contains embedded newlines inside a quoted value, with
+currency symbols and percent signs:
+
+```
+"last quote for 100 pcs EUR 44,90
+
+ 44,900 EUR   50%
+ 42,762 EUR   47%
+"
+```
+
+A line-oriented reader will split that row in half. The importer for this feed
+must use a real CSV/TSV parser with quote handling, not a line splitter.
+Several fields also carry trailing spaces (`CA3106E12-5S-14-A232 `), so trim
+before keying on anything.
+
 ## Decoding configured part numbers
 
 `catalog/micro-d-grammar.json` and `catalog/decode-part-number.mjs` recover
