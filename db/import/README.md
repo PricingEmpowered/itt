@@ -353,3 +353,62 @@ other.
 **Family hierarchy.** Item Master's Product Family Level 1 is an internal
 coding string (`VO   VOCO VOCO10 5`); levels 2–4 are readable names. The
 hierarchy is built from levels 2 down, and level 1 is kept as an attribute.
+
+## Decoding configured part numbers
+
+`catalog/micro-d-grammar.json` and `catalog/decode-part-number.mjs` recover
+configuration attributes from a part number.
+
+```bash
+node db/import/catalog/decode-part-number.mjs MDM-37SSM5-A174
+node db/import/catalog/decode-part-number.mjs --self-test
+```
+
+### Why this exists
+
+Section 5 of the target pricing specification fits a list-price model on
+configured-part attributes: series and shell size for the base, plating and
+contact type as cost adders, high-temperature and similar as value adders, and
+a per-contact increment. **None of those are columns in any extract supplied.**
+The item master carries a part number, a description and four family levels.
+
+They are encoded in the part number. The ITT Cannon microminiature catalog
+publishes the grammar, so the attributes can be recovered rather than keyed by
+hand across the catalogue — which is the difference between section 5 being a
+few weeks of work and being a data-entry project.
+
+`MDM-37SSM5-A174`, from the quote sample, decodes to:
+
+| Attribute | Value | Spec role |
+|---|---|---|
+| Series | MDM, MD metal shell | §5.1 base |
+| Contact arrangement | 37 | §5.1 size and per-contact increment |
+| Contact type | Socket | §5.1 cost adder |
+| Termination | Solderpot | |
+| Hardware | M5, jackscrew low profile slotted | |
+| Shell finish | A174, aluminium electroless nickel | §5.1 plating adder |
+| Commodity exposure | nickel | §2.3 commodity restatement |
+
+`A172` (gold over nickel) carries gold exposure, which is what §5.2's
+requirement that plating adders move with the gold and silver indices each
+month attaches to.
+
+### Scope and limits
+
+**Micro-D only.** The catalog covers MDM, MDLM, MDB, MDVB, MIK, MJS, MEB,
+TMDM, M83513 and related series; the grammar file currently implements MDM and
+MDLM, which are the two fully documented configurators.
+
+**MM38999 is not covered and matters.** Three of the four parts in the quote
+sample are `MM38999-…`, a Micro 38999 circular line with its own catalog. That
+catalog is needed before configured pricing reaches most of what is being
+quoted.
+
+**Contact arrangements are `9, 15, 21, 25, 31, 37, 51, 69, 100`.** §5.2's
+consistency rules — base price monotonic in shell size, more contacts never
+cheaper — are directly testable against this list once list prices are loaded.
+
+**The decoder is not a validator.** It reports what it could not parse in
+`unparsed` rather than rejecting, because an unrecognised segment is more
+likely a mod code the catalog says to consult the factory about than a bad
+part number.

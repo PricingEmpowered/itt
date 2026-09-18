@@ -1,0 +1,157 @@
+{
+  "source": "ITT Cannon Microminiature Connectors Catalog, Sep 2024",
+  "scope": "Micro-D family only. MM38999 (Micro 38999 circular) is NOT covered and needs its own catalog.",
+  "note": "Positional grammar per series. Segments are matched in order against a part number split on dashes, with compact forms (MDM-37SSM5-A174) handled by the decoder.",
+  "series": {
+    "MDM": {
+      "name": "MD Metal Shell",
+      "rohs_prefix": "RMDM",
+      "pattern": [
+        "contact_arrangement",
+        "contact_type",
+        "termination_type",
+        "termination_mod",
+        "hardware",
+        "shell_finish",
+        "mod_code"
+      ],
+      "reference": "MDM-25-P-H-003-M2-A174-F222"
+    },
+    "MDLM": {
+      "name": "MDM Low Profile",
+      "rohs_prefix": "RMDLM",
+      "pattern": [
+        "contact_arrangement",
+        "contact_type",
+        "wire_gauge",
+        "wire_type",
+        "wire_color",
+        "wire_length",
+        "hardware",
+        "shell_finish",
+        "mod_code"
+      ],
+      "reference": "MDLM-25-P-6-P-Y-18-L-A174-F222"
+    }
+  },
+  "dimensions": {
+    "contact_arrangement": {
+      "kind": "numeric",
+      "values": [
+        9,
+        15,
+        21,
+        25,
+        31,
+        37,
+        51,
+        69,
+        100
+      ],
+      "spec_role": "size and per-contact increment (spec 5.1). Monotonic price constraint applies (spec 5.2)."
+    },
+    "contact_type": {
+      "kind": "enum",
+      "values": {
+        "P": "Pin",
+        "S": "Socket"
+      },
+      "spec_role": "cost adder (spec 5.1)"
+    },
+    "termination_type": {
+      "kind": "enum",
+      "values": {
+        "H": "Insulated stranded wire",
+        "L": "Uninsulated stranded wire",
+        "S": "Solderpot",
+        "R": "High-temp wire (F300 series)"
+      }
+    },
+    "hardware": {
+      "kind": "enum",
+      "values": {
+        "A": "No hardware, larger hole",
+        "B": "No hardware, standard hole",
+        "B1": "No hardware, .1475 dia (size 100)",
+        "F": "Float mount",
+        "K": "Jackscrew, standard profile",
+        "L": "Jackscrew, low profile",
+        "P": "Jackpost",
+        "M2": "Jackscrew low profile, allen head (military, size 9-51)",
+        "M3": "Jackscrew standard profile, allen head (military, size 9-51)",
+        "M5": "Jackscrew low profile, slotted head (military, size 9-51)",
+        "M6": "Jackscrew standard profile, slotted head (military, size 9-51)",
+        "M7": "Jackpost (military)",
+        "M12": "Jackscrew low profile, allen head (military, size 100)",
+        "M13": "Jackscrew standard profile, allen head (military, size 100)",
+        "M14": "Jackscrew low profile, slotted head (military, size 100)",
+        "M16": "Jackscrew standard profile, slotted head (military, size 100)",
+        "M17": "Jackpost (military, size 100)"
+      }
+    },
+    "shell_finish": {
+      "kind": "enum",
+      "values": {
+        "": "Yellow chromate / cadmium (not RoHS compliant)",
+        "A174": "Aluminium, electroless nickel (RoHS compliant)",
+        "A172": "Aluminium, gold over nickel (RoHS compliant)",
+        "A141": "Aluminium, irridite / alodine (RoHS compliant)",
+        "A30": "Aluminium, black anodize (RoHS compliant)"
+      },
+      "commodity_indexed": {
+        "A172": [
+          "gold",
+          "nickel"
+        ],
+        "A174": [
+          "nickel"
+        ]
+      },
+      "spec_role": "plating adder. Spec 5.2 requires these to move with the gold and silver indices monthly."
+    },
+    "mod_code": {
+      "kind": "enum",
+      "values": {
+        "F222": "High temperature 200C",
+        "F300": "Ultra-high temperature 230C, micro twist pin contacts"
+      },
+      "spec_role": "value adder (spec 5.1). Consult factory for other mod codes."
+    },
+    "wire_gauge": {
+      "kind": "enum",
+      "values": {
+        "4": "#24 AWG",
+        "6": "#26 AWG (standard)",
+        "8": "#28 AWG"
+      }
+    },
+    "wire_type": {
+      "kind": "enum",
+      "values": {
+        "P": "Teflon PTFE per MIL-W-16878/4 (standard)",
+        "T": "Teflon TFE per MIL-W-22759/11",
+        "E": "Cross-linked Tefzel ETFE per MIL-W-22759/33"
+      }
+    },
+    "wire_color": {
+      "kind": "enum",
+      "values": {
+        "W": "White",
+        "Y": "Yellow (standard)",
+        "S": "Color coded per MIL-STD-681 System 1",
+        "T": "Ten colour repeat"
+      }
+    },
+    "wire_length": {
+      "kind": "numeric",
+      "unit": "inches",
+      "min": 1,
+      "note": "whole inches"
+    },
+    "termination_mod": {
+      "kind": "numeric",
+      "note": "Termination modification code, e.g. 003. Vocabulary is in the catalog's Termination Modification table, not reproduced here.",
+      "free": true
+    }
+  }
+}
