@@ -3,11 +3,29 @@
 ```bash
 export DATABASE_URL=postgres://user:pass@localhost:5432/pricespace
 
-node db/import/item-master.mjs  item-master.tsv
-node db/import/price-lists.mjs  pricelist-euro-oe.tsv     # once per list
-node db/import/customers.mjs    customer-master.tsv --parents customer-parent.tsv
-node db/import/quotes.mjs       quotes.tsv
+# Reference data first: transactions resolve against it.
+node db/import/customers.mjs      customer-master.tsv --parents customer-parent.tsv
+node db/import/item-master.mjs    item-master.tsv
+node db/import/price-lists.mjs    pricelist-euro-oe.tsv     # once per list
+
+# Booking before Sales. Booking is the only bridge between bill-to and
+# ship-to, and between internal and catalog part numbers, so loading it first
+# is what lets the others resolve.
+node db/import/booking-data.mjs   booking.tsv
+node db/import/sales-data.mjs     sales.tsv
+node db/import/spa-proposals.mjs  spa-items.tsv
+node db/import/quotes.mjs         quotes.tsv
+
+# Then read this. It is the point.
+node db/import/diagnostics.mjs
 ```
+
+**Run the diagnostics after every load.** These importers were written against
+column definitions and a handful of sample rows, because ITT cannot share
+extracts, so every assumption in them is unverified against the data it will
+actually meet. The diagnostics turn each assumption into a check and report
+what did not hold, with what to do about it. Its output is the thing to send
+back after a first real load.
 
 Every importer takes `--dry-run`, which parses, validates and reports without
 writing. Run the item master and price lists before quotes, so quote lines
