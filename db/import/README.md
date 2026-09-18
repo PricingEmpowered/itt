@@ -15,22 +15,29 @@ resolve to real products instead of placeholders.
 
 ## Part number namespaces
 
-Three identifiers appear across the files, and knowing which is which is what
-makes the imports join up:
+> **Superseded in part.** This section describes how the first import was
+> built. Two later findings change it and are recorded below under *Identifier
+> namespaces across the extracts* and *The extracts cover two different
+> business units*. Read those before relying on this.
+
+Two kinds of identifier appear across the files:
 
 | Identifier | Format | Appears in |
 |---|---|---|
-| Manufacturer part number | `CIR06F-20-3P-F80` | Item Master (`Part Description`), price lists (`Description`), **quote extract** (`Part Number`) |
-| Internal global part number | `000000110` | Item Master (`Part Number`), price lists (`Global Manufacturing Part Number`) |
-| Unmatched | `067478-0004` | Sales Data only |
+| Manufacturer (catalog) part number | `CIR06F-20-3P-F80` | Item Master (`Part Description`), price lists (`Description`), quote extract (`Part Number`), Booking (`Item Description`) |
+| Internal part number, scoped to a site | `000000110` (VEAM), `155521-3005` (IRNO) | Item Master (`Part Number`), price lists (`Global Manufacturing Part Number`), Booking (`Item Number`), Sales Data (`item_number`) |
 
-`products.id` is therefore the **manufacturer** part number — the one quotes
-and price lists share. The internal number is kept in
-`attributes.global_part_number`, which is what ties a product back to the item
-master.
+`products.id` is the **manufacturer** part number. The internal number is kept
+in `attributes.global_part_number`.
 
-Sales Data's item numbers are in a third format that matches neither, so sales
-history still cannot be tied to products. That one remains open with ITT.
+What this section originally claimed, and where it was wrong:
+
+- It treated `067478-0004` as a third, unmatched format. It is not a separate
+  kind of identifier — it is the internal part number as IRNO writes it, and
+  Booking Data pairs it with a catalog number in the same row.
+- It implied the quote extract and the price lists share parts because both
+  carry catalog numbers. They carry the same *kind* of identifier but describe
+  different business units, so in practice they do not overlap.
 
 ## Quotes (ECIW extract)
 
