@@ -163,7 +163,7 @@ recorded here.
 |---|---|---|
 | Item master | **VEAM** | Families are `VEAM Other`, `VEAM VBN`, `VEAM CIR/FRCIR` |
 | Price lists | **VEAM** | Series `Circular`, descriptions `CIR06F-20-3P-F80`, `46179-201T12` |
-| Quote extract | **IRNO** | `MDM-37SSM5-A174`, `MM38999-12S-20188` are Cannon micro-D and 38999 parts |
+| Quote extract | **both** | `MDM-…` and `MM38999-…` are IRNO; `FRCIR030FP-…`, `FRMGPCIR06A40B-…` and `VG95234…` are VEAM. The extract spans business units |
 | Sales Data | **IRNO** | `Business Unit` column |
 | Booking Data | **IRNO** | `Organization L2` column; segments `D Sub`, `MIL-DTL 5015 Series I`, `Trinity MKJ` |
 
@@ -353,6 +353,96 @@ other.
 **Family hierarchy.** Item Master's Product Family Level 1 is an internal
 coding string (`VO   VOCO VOCO10 5`); levels 2–4 are readable names. The
 hierarchy is built from levels 2 down, and level 1 is kept as an attribute.
+
+## ITT already publishes the normalised part number
+
+The price list carries a `Stripped Description` beside `Description`:
+
+| Description | Stripped Description |
+|---|---|
+| `46179-201T12` | `46179201T12` |
+| `CIR06F-20-3P-F80` | `CIR06F203PF80` |
+| `CIR01A-20-3P-F80-VO` | `CIR01A203PF80V0` |
+
+Uppercase with every non-alphanumeric removed reproduces 11 of 13 sample rows.
+The two that differ are the `-VO` suffix parts, where the stripped form has
+`V0` with a digit zero. No row anywhere in the four price lists keeps a letter
+`O` in its stripped form, so this is either a deliberate `O` to `0`
+substitution — common in part numbering, to remove the O/0 ambiguity — or the
+`-VO` suffix is really `-V0` and the description is the inconsistent one.
+**Worth one question to ITT, because it decides whether the join is exact.**
+
+This is the same idea as `PART_NO_ALPHA_NUM` in the SPA proposal views, and
+together they say ITT already has a normalisation its systems agree on. It
+should replace `catalogPartNumber()` as the join key once the rule is
+confirmed; that helper stays useful for cleaning packaging annotations, which
+stripping alone does not fix.
+
+## The price lists are not published list prices
+
+The `Type` column says what each file holds:
+
+| File | Type | Tier columns |
+|---|---|---|
+| `pricelist-na-dist`, `pricelist-euro-dist` | **Distribution Cost** | `QC1..QC25` / `C1..C25` |
+| `pricelist-na-oe`, `pricelist-euro-oe` | **OEM** | `QR1..QR25` / `R1..R25` |
+
+Neither is a published list price. "Distribution Cost" is what ITT charges a
+distributor — a cost from the distributor's side, a price from ITT's — and
+"OEM" is the direct price level. Both are imported into
+`price_list_items.list_price`, which names them wrongly.
+
+This matters beyond naming. Sections 4 and 5 of the target pricing
+specification compute realization as price ÷ list, and §5.3 validates a fitted
+model against published list. **If ITT has no published list price, realization
+has no denominator** and those sections need rebasing onto whichever level is
+the reference. Ask: is there a published list, or are Distribution Cost and OEM
+the only two levels?
+
+The price lists also carry fields nothing currently reads: `MOQ` and
+`Package Qty` (§5.5 small-lot rules), `Estimated Mfg Lead Time` (§8.6
+lead-time fit), `Design Registration Eligible` (§8.4 design win),
+`Country of Origin`, `ECCN Code` and `HTS Code`.
+
+## Corporate parents, and why §3.4 depends on them
+
+Eleven customer numbers in the parent sample collapse to eight corporate
+parents. Lockheed Martin alone spans three (`0000053230`, `0000054278`,
+`0000079468`) and Boeing two.
+
+Section 3.4 requires a peer group to hold **at least 5 distinct end customers,
+with no single customer above 40% of weighted volume**. Counted by customer
+number, a group that is entirely Lockheed passes both tests. **Those guards
+have to count corporate parents, not customer numbers**, or they do not do the
+job they exist for.
+
+Three rows to query:
+
+- `0000053412 TE CONNECTIVITY CORP` → parent `JOHN DEERE`. A connector
+  manufacturer parented to an agricultural OEM. The same customer number also
+  carries the industry `5000 MILITARY/AEROSPACE(NOT ALLOWED` in the master.
+- `0000073112 ITT KONI AMERICA LLC.` → `ITT OTHER VC`. Intercompany, which
+  §2.4 excludes from peer statistics. The parent field is how to find them.
+- `0000079223 GOVERNMENT OF ISRAEL` → `ELBIT`. Plausible if Elbit is the prime,
+  but worth confirming.
+
+## `Booked Cost` is probably extended, not per unit
+
+One line in the quote sample carries both a cost and a price:
+
+```
+MDM-37SSM5-A174   MinQty 10   Booked Cost 7.57   Unit Price 4.11
+```
+
+Read per unit that is a **-84.2%** margin. Read as extended over the minimum
+quantity it is **+81.6%**, which sits inside the range the invoice lines show
+(65.6%, 74.9%, 84.3%).
+
+One row is not proof, but -84% on a connector is implausible enough to act on.
+**The importer and `server/dealScore.ts` both treat `booked_cost` as a unit
+cost**, so if it is extended, every margin and every deal score computed from a
+quote is wrong by a factor of the minimum quantity. Confirm with ITT before
+loading volume.
 
 ## Decoding configured part numbers
 
