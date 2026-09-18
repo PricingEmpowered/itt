@@ -109,76 +109,71 @@ unset.
 
 ## Identifier namespaces across the extracts
 
-Samples of Sales Data and the site-scoped Customer Master arrived after the
-first import was built, and they do not share identifiers with what is already
-loaded. This is the single largest open question on the data.
+Booking Data resolves what the Sales Data sample alone made look like a
+namespace incompatibility. It is the only extract that carries both customer
+keys and both part keys in the same row, so it is the bridge between every
+other file.
 
-**Customer numbers are scoped to a site, not global.** The site file makes the
-pattern explicit:
+### Customer numbers are roles, not sites
 
-| Source | `site_name` / Business Unit | Prefix | Example |
-|---|---|---|---|
-| Customer Master | Weinstadt | `001` | `0010002740` |
-| Customer Master | IRNO | `007` | `0070931526` |
-| Sales Data | IRNO | `007` | `0070000215` |
-| Customer Master2 | — (not carried) | `000` | `0000037414` |
-| Quote extract | — (not carried) | `000` | `0000071275` |
-
-So Sales Data joins to the IRNO rows of the Customer Master, and the quote
-extract joins to Customer Master2 — which it already does; that import works.
-What is unresolved is whether `000` is a third site or a second numbering of
-the same customers. **If ITT's quoting system numbers customers differently
-from its invoicing system, quotes and invoices cannot be linked at all**, which
-removes win rate by band position and every quote-to-invoice measure.
-
-The practical consequence for the schema: a customer key is
-`(site, customer_no)`, not `customer_no`. `customers.id` is currently the bare
-number and would collide the moment a second site is loaded.
-
-**Part numbers show three shapes.** Nine digits is one namespace; Sales Data is
-not in it.
-
-| Source | Shape | Example |
+| Role | Prefix | Carried by |
 |---|---|---|
-| Item master | 9 digits | `000000050` |
-| Price lists | 9 digits (one row dashed) | `000000110`, `000-915640` |
-| Sales Data | 6 digits + dash + 4 | `067478-0004` |
-| Quote extract | alphanumeric | `MDM-37SSM5-A174` |
+| Bill-to | `000` | Booking `CustKey Billto`, Customer Master2, the quote extract |
+| Ship-to | `007` (IRNO), `001` (Weinstadt) | Booking `CustKey Shipto`, Sales Data, the site-scoped Customer Master |
 
-Ten digits do not become nine by trimming or padding, so these are different
-identifiers rather than different formatting. The likely explanation is that
-Sales Data carries base-plus-dash (`067478` + variant `0004`) while the master
-carries a flat key, but that is a guess and needs confirming rather than
-assuming — an earlier reading of these files called a join wrong in the other
-direction, and the sample row sets are disjoint, so overlap counts prove
-nothing either way.
+One booking row shows both at once: PEI-GENESIS is `0000071354` as bill-to and
+`0070000484` as ship-to. Same company, two keys, two roles. The site prefix on
+the ship-to side is the manufacturing site, which is why the Customer Master
+splits Weinstadt (`001`) from IRNO (`007`).
 
-Until this is settled, invoice lines cannot be joined to list price, which is
-what section 4 of the target pricing specification computes realization from.
+Quotes are raised against a bill-to; invoices are cut against a ship-to.
+**Booking Data is therefore the only way to link a quote to the invoice that
+resulted from it**, which section 9.5 of the target pricing specification needs
+for win rate by band position.
 
-## Data issues found in the Sales Data sample
+A customer key is `(role, number)` and a ship-to key is `(site, number)`.
+`customers.id` is currently the bare number, which cannot represent either.
 
-**Zero-price lines are real and destroy averages.** One of four sample rows is
-a `Rework Item` billed at $0.009 against $9,477 of cost — a no-charge rework.
-Its line margin is -105,299,900%. The target pricing specification already
-calls for excluding zero-price lines, returns and credit memos (section 2.4);
-this row is why that rule is not optional. `Billing Type` is the column to
-exclude on, and only the value `Invoice` appears so far.
+### Part numbers: every site has its own internal key, the catalog number is the common language
 
-**Distribution shows higher margin than OEM in the sample.** 74.9% and 84.3%
-against 65.6%. Three rows prove nothing, but it is worth establishing whether
-`Extended Sell` to a distributor is what ITT invoices the distributor or the
-distributor's resale, because the two give opposite readings of channel
-profitability.
+| Extract | Internal key | Catalog part number | Site |
+|---|---|---|---|
+| Item master | `Part Number` 9 digits, e.g. `000001750` | `Part Description`, e.g. `VBN-PG16BL20T39` | VEAM |
+| Price lists | `000-915640` | `Description`, e.g. `46179-201T12` | VEAM |
+| Booking Data | `Item Number` e.g. `155521-3005` | `Item Description`, e.g. `MKJ1A1T6-7SA` | IRNO |
+| Sales Data | `item_number` e.g. `067478-0004` | not carried | IRNO |
+| Quote extract | not carried | `Part Number`, e.g. `MDM-37SSM5-A174` | IRNO |
 
-**Fields the specification needs and Sales Data does not carry:** ship-to,
-order type beyond `Item Category` (Standard / Rework), SPA identifier and
-debit amount. Without the last two, ship-and-debit cannot be matched to POS
-and pocket price stops at invoice price.
+The catalog part number joins across extracts. The numeric keys do not, because
+they are per-site.
 
-**Formatting:** `customer_group_description` is space-padded to a fixed width
-and needs trimming. `Extended Cost` carries three decimals on some rows and
-none on others. Dates are `M/D/YYYY`, as in the quote extract.
+## The extracts cover two different business units
+
+This is the finding that matters most, and it corrects an earlier conclusion
+recorded here.
+
+| Extract | Business unit | Evidence |
+|---|---|---|
+| Item master | **VEAM** | Families are `VEAM Other`, `VEAM VBN`, `VEAM CIR/FRCIR` |
+| Price lists | **VEAM** | Series `Circular`, descriptions `CIR06F-20-3P-F80`, `46179-201T12` |
+| Quote extract | **IRNO** | `MDM-37SSM5-A174`, `MM38999-12S-20188` are Cannon micro-D and 38999 parts |
+| Sales Data | **IRNO** | `Business Unit` column |
+| Booking Data | **IRNO** | `Organization L2` column; segments `D Sub`, `MIL-DTL 5015 Series I`, `Trinity MKJ` |
+
+So the reference data loaded so far (item master, price lists) describes VEAM,
+while every transactional extract describes IRNO. They were never going to
+join.
+
+**This is the real reason no quoted product appears on a price list.** That was
+previously recorded as the extracts not overlapping on part numbers, which
+described the symptom rather than the cause. Net price realization is
+uncomputable today not because of identifier formats but because there is no
+IRNO price list and no IRNO item master.
+
+What is needed to close it: an **IRNO item master** (catalog part number,
+internal number, family hierarchy) and **IRNO price lists**. Alternatively, a
+decision that the project is VEAM-scoped, in which case VEAM transactions are
+needed instead.
 
 ## Structure of the other files (`Compiled_Structure.xlsx`)
 
