@@ -182,6 +182,44 @@ internal number, family hierarchy) and **IRNO price lists**. Alternatively, a
 decision that the project is VEAM-scoped, in which case VEAM transactions are
 needed instead.
 
+## Part numbers carry packaging annotations
+
+The item master writes the pack quantity inside the part number:
+
+```
+16958/1 (100 PCS PACK)
+43381-24        (100 PCS PACK)
+47107-155T9      (10 PCS PACK)
+```
+
+Six of seventeen sample rows do this, and one of them has eight spaces inside
+it. Used verbatim as a product id — which is what the importer did until now —
+none of those parts could ever match the same part as a price list or a quote
+writes it, because both of those carry the bare number.
+
+`catalogPartNumber()` in `lib.mjs` drops parentheticals and collapses runs of
+whitespace. Nothing is lost: the pack quantity goes to
+`attributes.pack_quantity` and the original string to
+`attributes.source_description`, so a cleaned id can always be traced back.
+
+The importer now prints every part number it cleaned, and warns when two rows
+clean to the same id — the same part bagged 10 and 100 to a pack is two rows
+and one product, which is correct, but it is also what over-aggressive
+cleaning looks like, so it should never be silent.
+
+**This is a stopgap.** ITT's quoting system already stores a normalized form of
+every part number beside the display form (`PART_NO_ALPHA_NUM` and siblings).
+That rule is the one their own systems agree on and should replace this one.
+
+### The `item master` column is a failed lookup
+
+The sheet's third column returns the part number where a lookup succeeded and
+`#N/A` where it did not. **Fourteen of seventeen rows are `#N/A`.** Whatever
+this file is being checked against does not contain most of its own rows, which
+raises a question about whether this sheet is the authoritative item master or
+a working extract. `Column1` is an exact duplicate of `Part Number` on every
+row; both are spreadsheet artifacts rather than data.
+
 ## SPA proposals: ITT's quoting system
 
 `proposals.SPA_PROPOSALS` and `proposals.vw_SPA_PROPOSALS_ITEMS` arrived as

@@ -16,7 +16,15 @@
  * hierarchy is built from levels 2 down and level 1 is kept as an attribute.
  */
 import pg from 'pg';
-import { parseArgs, readTable, requireDatabaseUrl, slug, value } from './lib.mjs';
+import {
+  catalogPartNumber,
+  packQuantity,
+  parseArgs,
+  readTable,
+  requireDatabaseUrl,
+  slug,
+  value,
+} from './lib.mjs';
 
 const COL = {
   partNumber: 'Part Number',
@@ -42,7 +50,8 @@ async function main() {
 
   for (const [index, row] of rows.entries()) {
     const globalPartNumber = value(row[COL.partNumber]);
-    const partNumber = value(row[COL.description]);
+    const rawDescription = value(row[COL.description]);
+    const partNumber = catalogPartNumber(rawDescription);
 
     // Without a manufacturer part number there is nothing to key on, and
     // nothing in quotes or the price lists could ever match it.
@@ -71,10 +80,42 @@ async function main() {
       globalPartNumber,
       codingString: value(row[COL.l1]),
       familyPath: levels.filter(Boolean),
+      packQuantity: packQuantity(rawDescription),
+      /* Kept so a cleaned id can always be traced back to what was supplied. */
+      sourceDescription: rawDescription !== partNumber ? rawDescription : null,
     });
   }
 
-  const dupes = products.length - new Set(products.map((p) => p.id)).size;
+  /*
+   * A cleaned id can collide with another row -- the same part packed 10 and
+   * 100 to a bag are two item-master rows and one product. That is the right
+   * outcome, but it must be visible rather than silent, because it also
+   * happens when the cleaning is too aggressive.
+   */
+  const cleaned = products.filter((p) => p.sourceDescription);
+  if (cleaned.length) {
+    console.log(`\n${cleaned.length} part number(s) had packaging annotations removed:`);
+    for (const p of cleaned.slice(0, 10)) {
+      console.log(`  ${JSON.stringify(p.sourceDescription)} -> ${JSON.stringify(p.id)}`);
+    }
+    if (cleaned.length > 10) console.log(`  ... and ${cleaned.length - 10} more`);
+  }
+
+  const byId = new Map();
+  for (const p of products) {
+    if (!byId.has(p.id)) byId.set(p.id, []);
+    byId.get(p.id).push(p);
+  }
+  const collisions = [...byId.entries()].filter(([, rows]) => rows.length > 1);
+  if (collisions.length) {
+    console.log(`\n${collisions.length} part number(s) appear on more than one row:`);
+    for (const [id, rows] of collisions.slice(0, 10)) {
+      const packs = rows.map((r) => r.packQuantity ?? 'each').join(', ');
+      console.log(`  ${JSON.stringify(id)} x${rows.length} (packs: ${packs})`);
+    }
+  }
+
+  const dupes = products.length - byId.size;
   console.log(
     `Read ${rows.length} rows -> ${products.length} products, ${families.size} families` +
       (dupes ? `, ${dupes} duplicate part number(s) collapsed` : '')
@@ -131,6 +172,8 @@ async function main() {
             global_part_number: p.globalPartNumber,
             family_coding: p.codingString,
             family_path: p.familyPath,
+            ...(p.packQuantity !== null ? { pack_quantity: p.packQuantity } : {}),
+            ...(p.sourceDescription ? { source_description: p.sourceDescription } : {}),
           }),
         ]
       );

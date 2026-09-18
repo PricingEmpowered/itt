@@ -21,6 +21,38 @@ export function value(raw) {
   return trimmed;
 }
 
+/**
+ * The catalog part number as the rest of the data writes it.
+ *
+ * The item master's `Part Description` carries packaging annotations inside
+ * the part number: `43381-24        (100 PCS PACK)`, `16958/1 (100 PCS PACK)`,
+ * `47107-155T9      (10 PCS PACK)`. Six of seventeen sample rows do. Used
+ * verbatim as a product id, none of them can ever match the same part as a
+ * price list or a quote writes it -- both of those carry the bare number.
+ *
+ * So: drop parentheticals, collapse runs of whitespace. The pack quantity is
+ * not thrown away; the caller records it alongside the raw string.
+ *
+ * This is a stopgap. ITT's own quoting system stores a normalized form of
+ * every part number next to the display form (`PART_NO_ALPHA_NUM` and its
+ * siblings), and when that rule is available it should replace this, because
+ * it is the one their systems already agree on.
+ */
+export function catalogPartNumber(raw) {
+  const v = value(raw);
+  if (v === null) return null;
+  const stripped = v.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  return stripped === '' ? null : stripped;
+}
+
+/** Pack quantity from an annotation like `(100 PCS PACK)`. Null when absent. */
+export function packQuantity(raw) {
+  const v = value(raw);
+  if (v === null) return null;
+  const m = v.match(/\((\d+)\s*(?:PCS|PC|EA)?\s*PACK\)/i);
+  return m ? Number(m[1]) : null;
+}
+
 export function number(raw) {
   const v = value(raw);
   if (v === null) return null;
