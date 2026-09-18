@@ -175,6 +175,75 @@ internal number, family hierarchy) and **IRNO price lists**. Alternatively, a
 decision that the project is VEAM-scoped, in which case VEAM transactions are
 needed instead.
 
+## SPA proposals: ITT's quoting system
+
+`proposals.SPA_PROPOSALS` and `proposals.vw_SPA_PROPOSALS_ITEMS` arrived as
+column listings, not data. Everything below is read off the schema, so nothing
+is verified: population rates, code vocabularies and join behaviour are all
+unknown until rows are supplied. Full listing in
+`samples/schemas/spa-proposals-columns.txt`.
+
+This is not a side dataset about special pricing. It is a quoting system, with
+validity periods, a multi-stage approval workflow through engineering,
+qualification and QA, competitor capture and win/loss. It answers more of the
+target pricing specification than everything else supplied put together.
+
+### What it unblocks
+
+| Spec requirement | Columns |
+|---|---|
+| §2.1 quotes won and lost, loss reason, competitor | `LOST_REASON_DESCR`, `COMMENTS_LOST`, `COMPETITOR_CODE/_DESCR`, `PART_NO_COMPETITOR`, `HAS_BOOKED`, `NUMBER_OF_TIME_BOOKED` |
+| §2.2 ship-and-debit matched by SPA id | `PROPOSALID` is that id; `SHIP_DEBIT_BUILD_COST`, `DISTY_COST_GIVEN` |
+| §3.1 channel | `CUST_NAME`, `CEM_NAME` (contract manufacturer) and `DIST_NAME` in one row — the three channel roles the spec separates |
+| §3.1 end market | `OPP_CATEGORIES_CODE/_DESCR`, plus `Industry/Type` on the bill-to master |
+| §3.2 family and sub-family | `PRODUCT_LINE`, `PRODUCT_SERIES`, `PRODUCT_CATEGORY`, `INTERNAL_PRODUCT_LINE` |
+| §4.5 SPA net to distributor | `REQ_TARGET_PRICE_DISTR`, `REQ_TARGET_PRICE_RESALE`, `DISTY_COST_GIVEN`, `DISTR_RESALE_MARGIN` |
+| §5.5 MOQ and small lot | `QTY_MOQ`, `QTY_MOQ_RESPONSE`, `PKG_QTY` |
+| §6.1 should-cost | `ENG_HOURS`, `ENG_CYCLETIME`, `QUAL_HOURS`, `QUAL_CYCLE_TIME`, `COST_MAKE_UP`, `COST_ESTIMATED`, `BOOK_COST` |
+| §6.3 program life | `PROGRAM_NAME` |
+| §8.4 design win | `OPP_DESIGN_REGISTRATION` |
+| §9.1 approval routing | `STATUS_CODE`, `ENG_APPROVAL_STATUS`, `QUAL_APPROVAL_STATUS`, `QA_APPROVAL_STATUS`, `REJECT_REASON_CODE`, and reroute/reopen comment trails |
+| §2.3 currency | `EXCHANGE_RATE_TO_USD`, `CURRENCY_TARGET`, `CURRENCY_GIVEN`, `OFFER_CUR_CODE` |
+| §2.4 exclusions | `IS_DELETED`, `INACTIVE`, `OBSOLETE`, `REJECT` and their item-level twins |
+| Quantity breaks | Six slots: `QTY_MOQ_1..6`, `PRICE_GIVEN_OEM_1..6`, `QTY_RELEASE_1..6`, `TOTAL_VALUE_1..6`, `MARGIN_1..6`, `DISCOUNT_1..6` |
+
+`ITT_MARGIN` and `DISTR_RESALE_MARGIN` mean ITT already computes margin on a
+quoted line. Worth comparing against margin derived from `BOOK_COST` before
+deciding which to trust.
+
+### Two columns that change the plan
+
+**`PART_NO_ALPHA_NUM`.** Every part number field has an `_ALPHA_NUM` twin —
+`PART_NO`, `PART_NO_MANUF`, `PART_NO_CUSTOMER`, `PART_NO_COMPETITOR` and
+`PART_NO_DESCR` all do. ITT already stores a normalized form of each part
+number for matching. **That is the answer to the part-number join problem, and
+it should be reused rather than reinvented** — whatever normalization they
+apply is the one their own systems already agree on. Ask for the rule, or
+derive it from a sample carrying both forms.
+
+**`ORDER_NUMBER` and `LINE_ORDER_NUMBER`.** These link an SPA line to an order,
+and Booking Data carries `Order Number` while Sales Data carries `Order No`.
+That completes the chain the specification needs end to end:
+
+```
+SPA proposal  ->  order  ->  booking  ->  invoice
+quoted price      committed             invoiced price and cost
+```
+
+With it, win rate by band position (§9.5) and realization against what was
+actually quoted both become computable. Nothing else supplied connects a quote
+to its invoice.
+
+### Still missing after this
+
+- **Commodity indices and metal content per part.** Nothing in any extract.
+  §2.3's commodity restatement and §5.2's plating adders both need them.
+- **Rebates and allowances.** `UNIT_DISCOUNT` and `TOTAL_DISCOUNT` are
+  quote-time discounts, not accrued rebate programmes. §2.2's pocket price
+  needs the latter.
+- **IRNO item master and IRNO price lists.** Unchanged, and still the largest
+  gap.
+
 ## Structure of the other files (`Compiled_Structure.xlsx`)
 
 Not yet imported. What the file shows, and what blocks each:
