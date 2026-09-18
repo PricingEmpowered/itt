@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { X, Calculator, AlertTriangle, CheckCircle } from 'lucide-react';
 import { db } from '../lib/dataClient';
+import { calculateCostPlus, type MarginBasis } from '../utils/costPlus';
 
 interface PricingRule {
   id: string;
   name: string;
   description: string;
   opportunity_threshold: number;
+  /* Whether the rates below are a margin on price or a markup on cost. */
+  margin_basis?: 'margin' | 'markup' | null;
+  /* The base rate for cost-plus. Was hardcoded 0.40 in this file. */
+  standard_rate?: number | null;
+  /* Cost floor: no price below cost / (1 - minimum_margin). Spec 7.2. */
+  minimum_margin?: number | null;
 }
 
 interface RulesPricingModalProps {
@@ -134,6 +141,24 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
 
         if (multiplier) {
           const price = calculation.standard_product_price * multiplier.multiplier;
+          /*
+           * This path prices off the standard product and never looks at cost,
+           * so it can return a price below cost without noticing. Warn when
+           * the cost is known; do not raise it automatically, because here the
+           * standard price is the reference and overriding it silently would
+           * be its own surprise.
+           */
+          const floorWarnings: string[] = [];
+          if (calculation.product_cost) {
+            const minMargin = rule.minimum_margin ?? 0.2;
+            const floor = calculation.product_cost / (1 - minMargin);
+            if (price < floor) {
+              floorWarnings.push(
+                `Below the cost floor: ${price.toFixed(2)} against a floor of ${floor.toFixed(2)} ` +
+                  `(cost ${calculation.product_cost.toFixed(2)}, minimum margin ${(minMargin * 100).toFixed(0)}%).`
+              );
+            }
+          }
           const selectedProduct = calculation.standard_product_id
             ? products.find(p => p.id === calculation.standard_product_id)
             : null;
@@ -145,6 +170,10 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
             multiplier: multiplier.multiplier,
             formula: `$${calculation.standard_product_price.toLocaleString()} × ${multiplier.multiplier}`,
             description: multiplier.description,
+            warnings: floorWarnings,
+            margin_earned: calculation.product_cost
+              ? ((price - calculation.product_cost) / price) * 100
+              : null,
             rule_name: rule.name,
             standard_product_id: calculation.standard_product_id,
             standard_product_name: selectedProduct?.name,
@@ -178,19 +207,35 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
           : null;
 
         if (baseAdder) {
-          const standardMargin = 0.40;
-          const totalMarginAdder = baseAdder.margin_adder + (marketAdder?.market_adder || 0);
-          const price = calculation.product_cost * (1 + standardMargin + totalMarginAdder);
+          /*
+           * Basis and rate come from the rule set, not from a literal here.
+           * The previous version hardcoded 0.40 and multiplied, which is a
+           * markup wearing the word "margin" -- see src/utils/costPlus.ts.
+           */
+          const result = calculateCostPlus({
+            cost: calculation.product_cost,
+            standardRate: rule.standard_rate ?? 0.4,
+            adders: [baseAdder.margin_adder, marketAdder?.market_adder || 0],
+            basis: (rule.margin_basis as MarginBasis) ?? 'markup',
+            minimumMargin: rule.minimum_margin ?? 0.2,
+          });
+          const price = result.price;
 
           setCalculatedPrice(price);
           setCalculationDetails({
-            method: 'Cost-Plus Pricing',
+            method: `Cost-Plus Pricing (${result.basis} basis)`,
             cost: calculation.product_cost,
-            standard_margin: standardMargin,
+            standard_margin: rule.standard_rate ?? 0.4,
             margin_adder: baseAdder.margin_adder,
             market_adder: marketAdder?.market_adder || 0,
-            total_margin: standardMargin + totalMarginAdder,
-            formula: `$${calculation.product_cost.toLocaleString()} × (1 + ${(standardMargin + totalMarginAdder).toFixed(2)})`,
+            total_margin: result.totalRate,
+            basis: result.basis,
+            margin_earned: result.marginEarned,
+            markup_applied: result.markupApplied,
+            floor_price: result.floorPrice,
+            floor_applied: result.floorApplied,
+            warnings: result.warnings,
+            formula: result.formula,
             description: baseAdder.description,
             market_description: marketAdder?.description,
             rule_name: rule.name,
@@ -475,6 +520,38 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
                         </p>
                       )}
                       <p className="font-mono text-xs bg-white px-2 py-1 rounded">{calculationDetails.formula}</p>
+                      {/*
+                        What the price actually earns, stated next to it. The
+                        defect this replaces was a markup labelled as a margin,
+                        which nobody could see from the screen.
+                      */}
+                      {typeof calculationDetails.margin_earned === 'number' && (
+                        <p className="text-slate-600">
+                          Earns{' '}
+                          <span className="font-semibold text-slate-900">
+                            {calculationDetails.margin_earned.toFixed(1)}% margin
+                          </span>
+                          {typeof calculationDetails.markup_applied === 'number' && (
+                            <> ({calculationDetails.markup_applied.toFixed(1)}% markup on cost)</>
+                          )}
+                        </p>
+                      )}
+                      {calculationDetails.floor_applied && (
+                        <p className="text-amber-800 font-medium">
+                          Raised to the cost floor.
+                        </p>
+                      )}
+                      {Array.isArray(calculationDetails.warnings) &&
+                        calculationDetails.warnings.length > 0 && (
+                          <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 space-y-1">
+                            {calculationDetails.warnings.map((w: string, i: number) => (
+                              <p key={i} className="text-amber-900 text-xs flex gap-2">
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                <span>{w}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
                       {calculationDetails.description && (
                         <p className="text-slate-600">{calculationDetails.description}</p>
                       )}

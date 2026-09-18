@@ -29,11 +29,23 @@ export function calculatePriceWithQuantityBreaks(
     (qb) => qb.price_list_id === priceListId || qb.price_list_id === null
   );
 
-  const applicableBreak = relevantBreaks.find(
-    (qb) =>
-      quantity >= qb.min_quantity &&
-      (qb.max_quantity === null || qb.max_quantity === undefined || quantity <= qb.max_quantity)
-  );
+  /*
+   * Sorted before matching. This used to take the first row the database
+   * happened to return, so with overlapping tiers - an override, a promotion,
+   * a bad import - the price depended on row order, which is neither stable
+   * nor something anyone would think to check. Two identical quotes could
+   * price differently.
+   *
+   * Descending by minimum quantity means the most specific tier a quantity
+   * qualifies for wins, which is what a quantity break is for.
+   */
+  const applicableBreak = [...relevantBreaks]
+    .sort((a, b) => b.min_quantity - a.min_quantity)
+    .find(
+      (qb) =>
+        quantity >= qb.min_quantity &&
+        (qb.max_quantity === null || qb.max_quantity === undefined || quantity <= qb.max_quantity)
+    );
 
   if (!applicableBreak) {
     return {
@@ -55,7 +67,14 @@ export function calculatePriceWithQuantityBreaks(
     breakDescription = `${discount}% discount (Qty ${applicableBreak.min_quantity}${applicableBreak.max_quantity ? `-${applicableBreak.max_quantity}` : '+'})`;
   } else if (applicableBreak.fixed_price !== null && applicableBreak.fixed_price !== undefined) {
     effectivePrice = applicableBreak.fixed_price;
-    discount = ((basePrice - effectivePrice) / basePrice) * 100;
+    /*
+     * Guarded: ITT parts frequently have no price on the standard list, and
+     * dividing by a zero or absent base price rendered "NaN%" on the quote.
+     * With no base to compare against there is no implied discount, which is
+     * different from a discount of zero.
+     */
+    discount =
+      basePrice > 0 ? ((basePrice - effectivePrice) / basePrice) * 100 : 0;
     breakDescription = `Fixed price $${effectivePrice.toFixed(2)} (Qty ${applicableBreak.min_quantity}${applicableBreak.max_quantity ? `-${applicableBreak.max_quantity}` : '+'})`;
   }
 
