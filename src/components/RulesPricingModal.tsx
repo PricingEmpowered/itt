@@ -209,14 +209,15 @@ export function RulesPricingModal({ isOpen, onClose, onPriceCalculated, customer
         if (baseAdder) {
           /*
            * Basis and rate come from the rule set, not from a literal here.
-           * The previous version hardcoded 0.40 and multiplied, which is a
-           * markup wearing the word "margin" -- see src/utils/costPlus.ts.
+           * ITT prices on margin, so an unset basis falls back to 'margin';
+           * a rule set still recording 'markup' is historical and warns on
+           * every calculation -- see src/utils/costPlus.ts.
            */
           const result = calculateCostPlus({
             cost: calculation.product_cost,
             standardRate: rule.standard_rate ?? 0.4,
             adders: [baseAdder.margin_adder, marketAdder?.market_adder || 0],
-            basis: (rule.margin_basis as MarginBasis) ?? 'markup',
+            basis: (rule.margin_basis as MarginBasis) ?? 'margin',
             minimumMargin: rule.minimum_margin ?? 0.2,
           });
           const price = result.price;
