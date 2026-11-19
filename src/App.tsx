@@ -21,6 +21,7 @@ const DealScoreAnalytics = lazy(() => import('./components/DealScoreAnalytics').
 const Analytics = lazy(() => import('./components/Analytics').then(m => ({ default: m.Analytics })));
 const Services = lazy(() => import('./components/Services').then(m => ({ default: m.Services })));
 const PriceAlerts = lazy(() => import('./components/PriceAlerts').then(m => ({ default: m.PriceAlerts })));
+const ApprovalMargins = lazy(() => import('./components/ApprovalMargins').then(m => ({ default: m.ApprovalMargins })));
 const Commissions = lazy(() => import('./components/Commissions').then(m => ({ default: m.Commissions })));
 const Settings = lazy(() => import('./components/Settings').then(m => ({ default: m.Settings })));
 const PricingExcellence = lazy(() => import('./components/PricingExcellence').then(m => ({ default: m.PricingExcellence })));
@@ -28,7 +29,7 @@ const AIAnalytics = lazy(() => import('./components/AIAnalytics').then(m => ({ d
 const AIQuestionLibrary = lazy(() => import('./components/AIQuestionLibrary').then(m => ({ default: m.AIQuestionLibrary })));
 const MarketingReport = lazy(() => import('./components/MarketingReport').then(m => ({ default: m.MarketingReport })));
 
-type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'marketing-report';
+type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'approval-margins' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'marketing-report';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -124,6 +125,7 @@ function App() {
               {currentView === 'dealscoreanalytics' && <DealScoreAnalytics />}
               {currentView === 'simulation' && <PriceSimulation />}
               {currentView === 'pricealerts' && <PriceAlerts />}
+              {currentView === 'approval-margins' && <ApprovalMargins />}
               {currentView === 'commissions' && <Commissions />}
               {currentView === 'excellence' && <PricingExcellence />}
               {currentView === 'users' && <Users />}

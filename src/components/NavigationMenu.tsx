@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, LayoutDashboard, Package, Headphones, FileText, ClipboardList, CheckSquare, UsersIcon, DollarSign, Layers, TrendingUp, BarChart3, Brain, BookOpen, Bell, Percent, Award, UserCircle, Settings as SettingsIcon, Target, Download } from 'lucide-react';
 
-type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'marketing-report';
+type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'approval-margins' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'marketing-report';
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -155,6 +155,12 @@ export function NavigationMenu({ currentView, onViewChange }: Props) {
               indent
             />
           </NavGroup>
+          <NavItem
+            icon={<Percent size={20} />}
+            label="Approval Margins"
+            active={currentView === 'approval-margins'}
+            onClick={() => onViewChange('approval-margins')}
+          />
           <NavItem
             icon={<TrendingUp size={20} />}
             label="Price Simulation"

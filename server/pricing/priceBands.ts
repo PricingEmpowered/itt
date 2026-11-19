@@ -3,8 +3,11 @@
  *
  * ## Where each of the three comes from
  *
- *   floor    cost / (1 - minimum margin). Specification 7.2. Policy arithmetic:
- *            the walk-away, independent of what the market has done.
+ *   floor    cost / (1 - minimum margin). The approval line: the lowest price
+ *            an analyst may quote on their own authority. Policy arithmetic,
+ *            independent of what the market has done. It is not a hard stop and
+ *            it never moves the target: a price below it can still be quoted
+ *            once it has been escalated.
  *   target   the 65th percentile margin of comparable like transactions.
  *            Evidence, set above the midpoint so the desk opens with ambition.
  *   ceiling  mean plus 1.5 standard deviations of that same evidence. The
@@ -125,8 +128,13 @@ export interface PriceBandInput {
   fallbackRate: number;
   fallbackBasis: MarginBasis;
   fallbackAdders?: number[];
-  /** Cost floor as a margin. 0.20 means never below cost / 0.80. */
-  minimumMargin?: number;
+  /**
+   * Minimum margin an analyst may quote at without approval, as a fraction:
+   * 0.30 means 30%. Required rather than defaulted, so that a caller cannot
+   * get a floor by forgetting to pass one. Null means none is set, and the
+   * band is returned without a floor rather than with an invented one.
+   */
+  minimumMargin: number | null;
   /** Typed list price for configured parts. Reporting only - never moves the band. */
   enteredListPrice?: number | null;
   /** Post-launch guidance. Absent at launch. */
@@ -157,6 +165,10 @@ export interface PriceBand {
   cohortUsed: CohortUsed;
   comparableCount: number;
   targetMargin: number | null;
+  /** The minimum margin the floor was built from, as a fraction. Null when none is set. */
+  floorMargin: number | null;
+  /** True when a quote at the target would itself need approval. Null when there is no floor. */
+  targetNeedsApproval: boolean | null;
   discountOffList: number | null;
   rationale: RationaleStep[];
   warnings: string[];
@@ -302,7 +314,7 @@ export function calculatePriceBand(input: PriceBandInput): PriceBand {
     fallbackRate,
     fallbackBasis,
     fallbackAdders = [],
-    minimumMargin = 0.2,
+    minimumMargin,
     enteredListPrice = null,
     adjustments,
     targetPercentile = TARGET_PERCENTILE,
@@ -323,6 +335,8 @@ export function calculatePriceBand(input: PriceBandInput): PriceBand {
       cohortUsed: 'none',
       comparableCount: 0,
       targetMargin: null,
+      floorMargin: null,
+      targetNeedsApproval: null,
       discountOffList: null,
       rationale: [
         {
@@ -346,14 +360,23 @@ export function calculatePriceBand(input: PriceBandInput): PriceBand {
   }
 
   /* The floor is policy and does not depend on the cohort. */
-  const floor =
-    minimumMargin > 0 && minimumMargin < 1 ? priceAtMargin(cost, minimumMargin) : null;
-  if (floor !== null) {
+  const hasFloor = minimumMargin !== null && minimumMargin > 0 && minimumMargin < 1;
+  const floor = hasFloor ? priceAtMargin(cost, minimumMargin as number) : null;
+  if (floor !== null && minimumMargin !== null) {
     rationale.push({
       label: 'Floor',
       value: floor,
-      basis: `Cost floor at ${(minimumMargin * 100).toFixed(0)}% minimum margin`,
-      detail: `${cost.toFixed(2)} ÷ (1 − ${minimumMargin.toFixed(2)}) = ${floor.toFixed(2)}. No price is offered below this.`,
+      basis: `Approval line at ${(minimumMargin * 100).toFixed(0)}% minimum margin`,
+      detail:
+        `${cost.toFixed(2)} ÷ (1 − ${minimumMargin.toFixed(2)}) = ${floor.toFixed(2)}. ` +
+        'A price below this needs approval. It can still be quoted once approved.',
+    });
+  } else {
+    rationale.push({
+      label: 'Floor',
+      value: null,
+      basis: 'No minimum margin set',
+      detail: 'No approval line is configured for this line, so none is shown and nothing is inferred.',
     });
   }
 
@@ -430,21 +453,26 @@ export function calculatePriceBand(input: PriceBandInput): PriceBand {
       }
     }
 
-    /* Comparable business earning less than the walk-away is a finding. */
-    if (floor !== null && target < floor) {
+    /*
+     * Comparable business earning less than the approval line is a finding,
+     * and it is reported as one. The target stays what the evidence says: raising
+     * it to the floor would hide that like business has mostly needed approval,
+     * and would recommend a price that has not been shown to win.
+     */
+    if (floor !== null && target < floor && minimumMargin !== null) {
       warnings.push(
-        `Comparable business achieved a median margin of ${(adjusted.margin * 100).toFixed(1)}%, below the ${(minimumMargin * 100).toFixed(0)}% walk-away. The floor applies instead of the evidence.`
+        `The target earns ${(adjusted.margin * 100).toFixed(1)}%, below the ${(minimumMargin * 100).toFixed(0)}% minimum margin. A quote at target needs approval.`
       );
-      target = floor;
       rationale.push({
-        label: 'Floor applied',
+        label: 'Below the approval line',
         value: floor,
-        basis: 'Evidence sits below the walk-away',
+        basis: 'Comparable business sold under the minimum margin',
         detail:
-          'The comparable-derived target fell below the cost floor, so the floor is the target. ' +
-          'Either this business is habitually sold below the minimum margin, or the floor is set above what it bears.',
+          `Comparable business reached ${(adjusted.margin * 100).toFixed(1)}% at the ${(targetPercentile * 100).toFixed(0)}th percentile, ` +
+          `under the ${(minimumMargin * 100).toFixed(0)}% an analyst may quote without approval. ` +
+          'Either this business is habitually sold below the minimum and escalated, or the minimum is set above what it bears. ' +
+          'The target is left as the evidence states it.',
       });
-      if (ceiling !== null && ceiling < target) ceiling = null;
     }
   } else {
     /*
@@ -459,7 +487,8 @@ export function calculatePriceBand(input: PriceBandInput): PriceBand {
       standardRate: fallbackRate,
       adders: fallbackAdders,
       basis: fallbackBasis,
-      minimumMargin,
+      /* The floor is the approval line, not a clamp: cost-plus must not apply one. */
+      minimumMargin: 0,
     });
     warnings.push(...cp.warnings);
     target = cp.price;
@@ -512,6 +541,8 @@ export function calculatePriceBand(input: PriceBandInput): PriceBand {
     cohortUsed,
     comparableCount: usable.length,
     targetMargin: marginOf(target, cost),
+    floorMargin: floor !== null ? minimumMargin : null,
+    targetNeedsApproval: floor !== null ? target < floor - 1e-9 : null,
     discountOffList,
     rationale,
     warnings,

@@ -87,7 +87,9 @@ async function main() {
         `floor ${money(p.band.floor).padStart(10)}  ` +
         `target ${money(p.band.target).padStart(10)}  ` +
         `ceiling ${money(p.band.ceiling).padStart(10)}  ` +
-        `${basis}${p.band.priceable && p.band.targetBasis === 'comparable' ? ` (${p.band.comparableCount}, ${p.band.cohortUsed})` : ''}`
+        `${basis}${p.band.priceable && p.band.targetBasis === 'comparable' ? ` (${p.band.comparableCount}, ${p.band.cohortUsed})` : ''}` +
+        `  min ${p.authority.minimumMargin === null ? '—' : (p.authority.minimumMargin * 100).toFixed(1) + '%'}` +
+        `${p.authority.isPlaceholder ? ' placeholder' : ''}`
     );
 
     /* Invariants that must hold on live data, not just in the unit checks. */
@@ -102,6 +104,14 @@ async function main() {
       }
       if (p.band.rationale.length === 0) {
         console.log('       FAIL priced line with no rationale');
+        failures++;
+      }
+      /* The approval line must come from the margin table, and the band must carry it. */
+      if (p.authority.minimumMargin === null) {
+        console.log('       FAIL no minimum margin resolved from the table');
+        failures++;
+      } else if (p.band.floorMargin !== p.authority.minimumMargin) {
+        console.log('       FAIL band floor was not built from the resolved minimum margin');
         failures++;
       }
     }

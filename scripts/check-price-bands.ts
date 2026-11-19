@@ -193,14 +193,48 @@ check('the user can tell evidence from assumption', () => {
   assert.ok(t2 && t2.basis.includes('fallback'));
 });
 
-console.log('\nthe floor wins');
+console.log('\nthe floor is the approval line, not an override');
 
-check('evidence below the walk-away is reported, and the floor applies', () => {
+check('evidence below the approval line is reported and the target is left alone', () => {
   const b = calculatePriceBand({ ...BASE, comparables: [0.1, 0.1, 0.1, 0.1, 0.1].map((m) => cmp(m)) });
-  near(b.target, 125, 'target raised to the floor');
-  assert.equal(b.ceiling, null, 'a ceiling below the floored target must be withdrawn');
-  assert.ok(b.warnings.some((w) => w.includes('below the')));
-  assert.ok(b.rationale.some((r) => r.label === 'Floor applied'));
+  near(b.target, 111.111, 'target stays what the evidence says');
+  near(b.floor, 125, 'floor');
+  assert.equal(b.targetNeedsApproval, true);
+  assert.ok(b.warnings.some((w) => w.includes('needs approval')));
+  assert.ok(b.rationale.some((r) => r.label === 'Below the approval line'));
+});
+
+check('a target at or above the floor does not need approval', () => {
+  const b = calculatePriceBand({ ...BASE, comparables: EVEN_COHORT });
+  assert.equal(b.targetNeedsApproval, false);
+  assert.ok(!b.rationale.some((r) => r.label === 'Below the approval line'));
+});
+
+check('the floor carries the margin it was built from', () => {
+  const b = calculatePriceBand({ ...BASE, minimumMargin: 0.3, comparables: EVEN_COHORT });
+  assert.equal(b.floorMargin, 0.3);
+  near(b.floor, 142.857, 'floor at 30%');
+});
+
+check('the cost-plus fallback does not clamp to the floor either', () => {
+  const b = calculatePriceBand({
+    ...BASE,
+    fallbackRate: 0.1,
+    minimumMargin: 0.3,
+    comparables: [],
+  });
+  assert.equal(b.targetBasis, 'cost-plus-fallback');
+  near(b.target, 111.111, 'a 10% cost-plus target is not raised to the 30% floor');
+  assert.equal(b.targetNeedsApproval, true);
+});
+
+check('no minimum margin means no floor, and none is invented', () => {
+  const b = calculatePriceBand({ ...BASE, minimumMargin: null, comparables: EVEN_COHORT });
+  assert.equal(b.floor, null);
+  assert.equal(b.floorMargin, null);
+  assert.equal(b.targetNeedsApproval, null);
+  const step = b.rationale.find((r) => r.label === 'Floor');
+  assert.ok(step && step.basis.includes('No minimum margin'));
 });
 
 console.log('\nmissing cost');

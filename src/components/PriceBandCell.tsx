@@ -17,15 +17,19 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, AlertTriangle, Info } from 'lucide-react';
 import type { PricedLine } from '../../server/pricing/priceQuoteLines';
+import { assessEscalation } from '../utils/escalation';
 
 interface Props {
   priced: PricedLine | undefined;
+  /** The price as currently entered, so the approval flag follows the analyst's edits. */
+  unitPrice: number | null | undefined;
+  discountPercent: number | null | undefined;
   /** Applies the target to the line's unit price. */
   onApplyTarget: (price: number) => void;
   format: (value: number) => string;
 }
 
-export function PriceBandCell({ priced, onApplyTarget, format }: Props) {
+export function PriceBandCell({ priced, unitPrice, discountPercent, onApplyTarget, format }: Props) {
   const [showRationale, setShowRationale] = useState(false);
 
   if (!priced) {
@@ -50,6 +54,18 @@ export function PriceBandCell({ priced, onApplyTarget, format }: Props) {
 
   const evidenceBased = band.targetBasis === 'comparable';
 
+  /*
+   * The approval flag is worked out here from the price as it stands, not taken
+   * from the server's answer, because the analyst edits the price after pricing
+   * and a flag that still described the target would be wrong the moment they did.
+   */
+  const approval = assessEscalation({
+    unitPrice,
+    discountPercent,
+    cost: priced.costUsed,
+    minimumMargin: priced.authority.minimumMargin,
+  });
+
   return (
     <div className="space-y-1 min-w-[190px]">
       <div className="flex items-baseline gap-2">
@@ -64,7 +80,7 @@ export function PriceBandCell({ priced, onApplyTarget, format }: Props) {
       </div>
 
       <div className="flex gap-3 text-[11px] text-gray-600">
-        <span>
+        <span title="Below this price a quote needs approval. It can still be quoted once approved.">
           floor <span className="font-medium">{band.floor === null ? '—' : format(band.floor)}</span>
         </span>
         <span>
@@ -114,8 +130,38 @@ export function PriceBandCell({ priced, onApplyTarget, format }: Props) {
         </button>
       </div>
 
+      <div
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+          approval.status === 'needs-approval'
+            ? 'bg-red-50 text-red-700 border-red-200'
+            : approval.status === 'within-authority'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-gray-50 text-gray-500 border-gray-200'
+        }`}
+        title={approval.reason}
+      >
+        {approval.status === 'needs-approval' && <AlertTriangle size={11} />}
+        {approval.status === 'needs-approval'
+          ? `Needs approval · ${approval.marginPercent?.toFixed(1)}% < ${approval.minimumMarginPercent?.toFixed(1)}%`
+          : approval.status === 'within-authority'
+            ? 'Within authority'
+            : 'Approval not assessed'}
+      </div>
+
       {showRationale && (
         <div className="mt-1 p-2 bg-gray-50 border border-gray-200 rounded space-y-2 max-w-sm">
+          <div className="text-[11px] leading-snug">
+            <div className="font-semibold text-gray-800">Minimum margin</div>
+            <div className="text-gray-600">{priced.authority.reason}</div>
+            {priced.authority.isPlaceholder && (
+              <div className="text-amber-800">
+                This is a placeholder until ITT confirms margins by product line.
+              </div>
+            )}
+            {priced.authority.note && !priced.authority.isPlaceholder && (
+              <div className="text-gray-500">{priced.authority.note}</div>
+            )}
+          </div>
           {band.rationale.map((step, i) => (
             <div key={i} className="text-[11px] leading-snug">
               <div className="flex items-baseline justify-between gap-2">

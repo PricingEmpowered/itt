@@ -3,6 +3,7 @@ import { analyticsRouter } from './analytics.js';
 import { authRouter } from './auth.js';
 import { dashboardRouter } from './dashboard.js';
 import { dataRouter } from './data.js';
+import { marginsRouter } from './margins.js';
 import { quotesRouter } from './quotes.js';
 import { referenceRouter } from './reference.js';
 import { systemRouter } from './system.js';
@@ -12,6 +13,7 @@ export const appRouter = router({
   analytics: analyticsRouter,
   reference: referenceRouter,
   data: dataRouter,
+  margins: marginsRouter,
   quotes: quotesRouter,
   dashboard: dashboardRouter,
   system: systemRouter,

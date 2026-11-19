@@ -56,7 +56,7 @@ check('CRLF leaves no carriage return on the last field', () => {
 });
 
 check('a UTF-8 BOM does not become part of the first header', () => {
-  const rows = parseCsv('﻿part,qty\nX,1');
+  const rows = parseCsv('\uFEFFpart,qty\nX,1');
   assert.equal(rows[0][0], 'part');
 });
 

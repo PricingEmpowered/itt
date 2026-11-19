@@ -6,6 +6,7 @@ import { Product, Customer, PriceList, QuoteLine, ProductFamily, QuantityBreak, 
 import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones, Upload, Sparkles, AlertTriangle } from 'lucide-react';
 import { parseChannelPartnersForm, requestIdOf, type ParsedForm } from '../utils/channelPartnersForm';
 import { PriceBandCell } from './PriceBandCell';
+import { assessEscalation, summariseEscalation } from '../utils/escalation';
 import type { PricedLine } from '../../server/pricing/priceQuoteLines';
 import { PriceGuidance } from './PriceGuidance';
 import { calculateDealScore } from '../utils/dealScoreCalculator';
@@ -925,6 +926,43 @@ export function QuoteBuilder() {
               </div>
             );
           })()}
+          {Object.keys(pricedLines).length > 0 && (() => {
+            const counts = summariseEscalation(
+              quoteLines.map((line, i) =>
+                assessEscalation({
+                  unitPrice: line.unit_price,
+                  discountPercent: line.discount_applied,
+                  cost: pricedLines[i]?.costUsed,
+                  minimumMargin: pricedLines[i]?.authority.minimumMargin,
+                })
+              )
+            );
+            if (counts.needsApproval === 0 && counts.unknown === 0) {
+              return (
+                <div className="mb-3 text-xs text-emerald-700">
+                  All {counts.total} line{counts.total === 1 ? '' : 's'} are at or above the minimum
+                  margin.
+                </div>
+              );
+            }
+            return (
+              <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                {counts.needsApproval > 0 && (
+                  <span className="inline-flex items-center gap-1 font-medium text-red-700">
+                    <AlertTriangle size={13} />
+                    {counts.needsApproval} of {counts.total} line
+                    {counts.total === 1 ? '' : 's'} will need approval at these prices
+                  </span>
+                )}
+                {counts.unknown > 0 && (
+                  <span className="text-gray-500">
+                    {counts.unknown} could not be assessed (no cost or no price yet)
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="flex gap-2 border-b border-gray-200 -mb-px">
             <button
               onClick={() => setLineType('products')}
@@ -1060,6 +1098,8 @@ export function QuoteBuilder() {
                   <td className="px-4 py-3 align-top">
                     <PriceBandCell
                       priced={pricedLines[index]}
+                      unitPrice={line.unit_price}
+                      discountPercent={line.discount_applied}
                       format={money}
                       onApplyTarget={(price) => {
                         updateLine(index, 'unit_price', toCents(price));

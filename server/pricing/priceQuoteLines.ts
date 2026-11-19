@@ -42,11 +42,15 @@
 import type { Queryable } from '../db.js';
 import { calculatePriceBand, type ComparableLine, type PriceBand } from './priceBands.js';
 import type { MarginBasis } from './costPlus.js';
+import { resolveFloor, type FloorResolution, type MarginFloorRow } from './marginFloors.js';
+
+/* Whose authority the analyst is quoting under. The delegation of authority
+   will add manager and director levels; until then the pricing desk is analysts. */
+const AUTHORITY_LEVEL = 'analyst';
 
 /* Used when no rule set matches and none is active. Stated, not hidden. */
 const DEFAULT_FALLBACK_RATE = 0.4;
 const DEFAULT_FALLBACK_BASIS: MarginBasis = 'margin';
-const DEFAULT_MINIMUM_MARGIN = 0.2;
 
 export interface PriceLineRequest {
   /** Catalogue product. Null for a configured or custom part. */
@@ -68,6 +72,12 @@ export interface PricedLine {
   /** The per-unit cost the band was built on. */
   costUsed: number | null;
   costSource: 'line' | 'catalogue' | 'none';
+  /**
+   * The minimum margin that applies to this line and where it came from. The
+   * screen compares the live unit price against it, so the approval flag moves
+   * as the analyst edits the price without another round trip.
+   */
+  authority: FloorResolution & { level: string };
   band: PriceBand;
 }
 
@@ -75,6 +85,7 @@ type ProductRow = {
   id: string;
   category: string | null;
   family_id: string | null;
+  family_name: string | null;
   base_cost: string | null;
 };
 
@@ -91,7 +102,15 @@ type RuleRow = {
   product_family_id: string | null;
   margin_basis: string | null;
   standard_rate: string | null;
-  minimum_margin: string | null;
+};
+
+type FloorRow = {
+  authority_level: string;
+  product_line: string;
+  region: string;
+  minimum_margin: string;
+  is_placeholder: boolean;
+  note: string | null;
 };
 
 /** Margin on the effective post-discount price, or null when it cannot be known. */
@@ -126,21 +145,32 @@ export async function priceQuoteLines(
    */
   let industryId: string | null = null;
   let regionId: string | null = null;
+  let regionName: string | null = null;
   if (customerId) {
-    const { rows } = await db.query<{ industry_id: string | null; region_id: string | null }>(
-      'SELECT industry_id, region_id FROM customers WHERE id = $1',
-      [customerId]
-    );
+    const { rows } = await db.query<{
+      industry_id: string | null;
+      region_id: string | null;
+      region: string | null;
+    }>('SELECT industry_id, region_id, region FROM customers WHERE id = $1', [customerId]);
     industryId = rows[0]?.industry_id ?? null;
     regionId = rows[0]?.region_id ?? null;
+    regionName = rows[0]?.region ?? null;
   }
 
   const productIds = [...new Set(lines.map((l) => l.productId).filter((id): id is string => !!id))];
 
   const productsById = new Map<string, ProductRow>();
   if (productIds.length > 0) {
+    /*
+     * The product line is taken from the product family. ITT's own product-line
+     * field is not on the catalogue, so this is the one place that mapping
+     * lives: if it moves, it moves here and nowhere else.
+     */
     const { rows } = await db.query<ProductRow>(
-      'SELECT id, category, family_id, base_cost FROM products WHERE id = ANY($1)',
+      `SELECT p.id, p.category, p.family_id, f.name AS family_name, p.base_cost
+         FROM products p
+         LEFT JOIN product_families f ON f.id = p.family_id
+        WHERE p.id = ANY($1)`,
       [productIds]
     );
     for (const r of rows) productsById.set(r.id, r);
@@ -190,14 +220,12 @@ export async function priceQuoteLines(
   }
 
   /*
-   * Rule sets supply the cost-plus fallback and the minimum margin. Indexed
-   * by family; a config with no family acts as the default for everything.
-   * Minimum margin is due to become per-product-family once ITT's delegation
-   * of authority arrives, at which point the family lookup below is the hook
-   * it lands on.
+   * Rule sets supply the cost-plus fallback. Indexed by family; a config with
+   * no family acts as the default for everything. The minimum margin no longer
+   * comes from here: it is looked up per product line and region below.
    */
   const { rows: ruleRows } = await db.query<RuleRow>(
-    `SELECT product_family_id, margin_basis, standard_rate, minimum_margin
+    `SELECT product_family_id, margin_basis, standard_rate
        FROM pricing_rules_config
       WHERE is_active`
   );
@@ -208,6 +236,20 @@ export async function priceQuoteLines(
     else if (!defaultRule) defaultRule = r;
   }
   if (!defaultRule && ruleRows.length > 0) defaultRule = ruleRows[0];
+
+  /* Small table, read whole, resolved per line in memory. */
+  const { rows: floorRows } = await db.query<FloorRow>(
+    `SELECT authority_level, product_line, region, minimum_margin, is_placeholder, note
+       FROM margin_authority_floors`
+  );
+  const floors: MarginFloorRow[] = floorRows.map((r) => ({
+    authorityLevel: r.authority_level,
+    productLine: r.product_line,
+    region: r.region,
+    minimumMargin: Number(r.minimum_margin),
+    isPlaceholder: r.is_placeholder,
+    note: r.note,
+  }));
 
   return lines.map((line, index) => {
     const product = line.productId ? productsById.get(line.productId) : undefined;
@@ -232,7 +274,9 @@ export async function priceQuoteLines(
 
     const basis = rule?.margin_basis === 'markup' ? 'markup' : DEFAULT_FALLBACK_BASIS;
     const fallbackRate = num(rule?.standard_rate ?? null) ?? DEFAULT_FALLBACK_RATE;
-    const minimumMargin = num(rule?.minimum_margin ?? null) ?? DEFAULT_MINIMUM_MARGIN;
+    /* A product line is its family name; a part with no family matches only the defaults. */
+    const authority = resolveFloor(floors, AUTHORITY_LEVEL, product?.family_name ?? null, regionName);
+    const minimumMargin = authority.minimumMargin;
 
     const band = calculatePriceBand({
       cost: costUsed,
@@ -250,6 +294,7 @@ export async function priceQuoteLines(
       category: product?.category ?? null,
       costUsed,
       costSource,
+      authority: { ...authority, level: AUTHORITY_LEVEL },
       band,
     };
   });
