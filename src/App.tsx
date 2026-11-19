@@ -26,10 +26,9 @@ const Settings = lazy(() => import('./components/Settings').then(m => ({ default
 const PricingExcellence = lazy(() => import('./components/PricingExcellence').then(m => ({ default: m.PricingExcellence })));
 const AIAnalytics = lazy(() => import('./components/AIAnalytics').then(m => ({ default: m.AIAnalytics })));
 const AIQuestionLibrary = lazy(() => import('./components/AIQuestionLibrary').then(m => ({ default: m.AIQuestionLibrary })));
-const RulesPricingEngine = lazy(() => import('./components/RulesPricingEngine').then(m => ({ default: m.RulesPricingEngine })));
 const MarketingReport = lazy(() => import('./components/MarketingReport').then(m => ({ default: m.MarketingReport })));
 
-type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'rules-pricing' | 'marketing-report';
+type View = 'dashboard' | 'products' | 'services' | 'quotes' | 'approvals' | 'customers' | 'pricelists' | 'users' | 'allquotes' | 'quantitybreaks' | 'quantitybreaks-analytics' | 'simulation' | 'analytics' | 'dealscoreanalytics' | 'pricealerts' | 'commissions' | 'settings' | 'excellence' | 'ai-analytics' | 'ai-questions' | 'marketing-report';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -124,7 +123,6 @@ function App() {
               {currentView === 'ai-questions' && <AIQuestionLibrary />}
               {currentView === 'dealscoreanalytics' && <DealScoreAnalytics />}
               {currentView === 'simulation' && <PriceSimulation />}
-              {currentView === 'rules-pricing' && <RulesPricingEngine />}
               {currentView === 'pricealerts' && <PriceAlerts />}
               {currentView === 'commissions' && <Commissions />}
               {currentView === 'excellence' && <PricingExcellence />}

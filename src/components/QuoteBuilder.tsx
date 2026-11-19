@@ -3,9 +3,8 @@ import { getCurrentUser } from '../lib/currentUser';
 import { trpcClient } from '../lib/trpcClient';
 import { db } from '../lib/dataClient';
 import { Product, Customer, PriceList, QuoteLine, ProductFamily, QuantityBreak, Currency, Service, QuoteService } from '../types';
-import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones, Calculator } from 'lucide-react';
+import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones } from 'lucide-react';
 import { PriceGuidance } from './PriceGuidance';
-import { RulesPricingModal } from './RulesPricingModal';
 import { calculateDealScore } from '../utils/dealScoreCalculator';
 import { DealScoreIndicator } from './DealScoreIndicator';
 import { calculatePriceWithQuantityBreaks, getAvailableQuantityBreaks } from '../utils/quantityBreakCalculator';
@@ -39,8 +38,6 @@ export function QuoteBuilder() {
   const [quantityBreaks, setQuantityBreaks] = useState<QuantityBreak[]>([]);
   const [winProbability, setWinProbability] = useState<any>(null);
   const [calculatingWinProb, setCalculatingWinProb] = useState(false);
-  const [showRulesPricingModal, setShowRulesPricingModal] = useState(false);
-  const [rulesPricingLineIndex, setRulesPricingLineIndex] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -279,19 +276,6 @@ export function QuoteBuilder() {
 
   const removeLine = (index: number) => {
     setQuoteLines(quoteLines.filter((_, i) => i !== index));
-  };
-
-  const handleRulesPriceCalculated = (price: number, _details: any) => {
-    if (rulesPricingLineIndex !== null) {
-      updateLine(rulesPricingLineIndex, 'unit_price', price);
-    }
-    setShowRulesPricingModal(false);
-    setRulesPricingLineIndex(null);
-  };
-
-  const openRulesPricingModal = (index: number) => {
-    setRulesPricingLineIndex(index);
-    setShowRulesPricingModal(true);
   };
 
   const calculateTotals = () => {
@@ -717,15 +701,6 @@ export function QuoteBuilder() {
                           </option>
                         ))}
                       </select>
-                      {!line.product_id && (
-                        <button
-                          onClick={() => openRulesPricingModal(index)}
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          <Calculator size={14} />
-                          Calculate Non-Standard Price
-                        </button>
-                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -985,17 +960,6 @@ export function QuoteBuilder() {
           </div>
         )}
       </div>
-
-      <RulesPricingModal
-        isOpen={showRulesPricingModal}
-        onClose={() => {
-          setShowRulesPricingModal(false);
-          setRulesPricingLineIndex(null);
-        }}
-        onPriceCalculated={handleRulesPriceCalculated}
-        customerSegment={customers.find(c => c.id === selectedCustomer)?.segment}
-        quoteValue={calculateTotals().total}
-      />
     </div>
   );
 }
