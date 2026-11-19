@@ -162,6 +162,12 @@ export interface QuoteLine {
   unit_price: number;
   discount_applied: number;
   line_total: number;
+  /* Part number as it arrived, for lines with no catalogue product. */
+  source_part_number?: string | null;
+  /* List price from the Channel Partners form. Reporting only. */
+  entered_list_price?: number | null;
+  /* Per-unit cost booked against the line at quote time. */
+  booked_cost?: number | null;
 }
 
 export interface ApprovalRequest {

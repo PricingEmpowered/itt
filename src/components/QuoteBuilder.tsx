@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getCurrentUser } from '../lib/currentUser';
 import { trpcClient } from '../lib/trpcClient';
 import { db } from '../lib/dataClient';
 import { Product, Customer, PriceList, QuoteLine, ProductFamily, QuantityBreak, Currency, Service, QuoteService } from '../types';
-import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones } from 'lucide-react';
+import { Plus, Trash2, FileText, Filter, Layers, Package, Headphones, Upload, Sparkles, AlertTriangle } from 'lucide-react';
+import { parseChannelPartnersForm, requestIdOf, type ParsedForm } from '../utils/channelPartnersForm';
+import { PriceBandCell } from './PriceBandCell';
+import type { PricedLine } from '../../server/pricing/priceQuoteLines';
 import { PriceGuidance } from './PriceGuidance';
 import { calculateDealScore } from '../utils/dealScoreCalculator';
 import { DealScoreIndicator } from './DealScoreIndicator';
@@ -36,6 +39,18 @@ export function QuoteBuilder() {
   const [dealScoreDetails, setDealScoreDetails] = useState<any>(null);
   const [calculatingScore, setCalculatingScore] = useState(false);
   const [quantityBreaks, setQuantityBreaks] = useState<QuantityBreak[]>([]);
+  const [pricedLines, setPricedLines] = useState<Record<number, PricedLine>>({});
+  const [pricing, setPricing] = useState(false);
+  const [uploadReport, setUploadReport] = useState<{
+    fileName: string;
+    form: ParsedForm;
+    matched: number;
+    unmatchedParts: string[];
+    inactiveParts: string[];
+    requestId: string | null;
+    requestIdConflict: string[];
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [winProbability, setWinProbability] = useState<any>(null);
   const [calculatingWinProb, setCalculatingWinProb] = useState(false);
 
@@ -153,6 +168,171 @@ export function QuoteBuilder() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const money = (v: number) =>
+    '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  /*
+   * A target is a calculated figure and carries full precision; a unit price
+   * is money and does not. $486.2559664397803 is not a price anyone can quote,
+   * so anything that becomes a unit price is rounded to the cent first.
+   */
+  const toCents = (v: number) => Math.round(v * 100) / 100;
+
+  /*
+   * Prices every line in one call. Takes the lines as an argument rather than
+   * reading state because the upload prices immediately after building them,
+   * and a state update is not visible until the next render.
+   */
+  const priceAllLines = async (lines: Partial<QuoteLine>[], applyTargets = false) => {
+    const payload = lines.map((l) => ({
+      productId: l.product_id || null,
+      partNumber: l.source_part_number ?? null,
+      quantity: l.quantity ?? null,
+      listPrice: l.entered_list_price ?? null,
+      cost: l.booked_cost ?? null,
+    }));
+    if (payload.length === 0) return;
+
+    setPricing(true);
+    try {
+      const result = await trpcClient.quotes.priceLines.query({
+        customerId: selectedCustomer || null,
+        lines: payload,
+      });
+      const byIndex: Record<number, PricedLine> = {};
+      for (const p of result) byIndex[p.index] = p;
+      setPricedLines(byIndex);
+
+      /*
+       * On upload the target becomes the starting unit price, so the analyst
+       * opens a priced quote and adjusts from there rather than a quote of
+       * zeroes. Lines that could not be priced are left at zero: there is no
+       * number to start from, and inventing one is the thing this whole path
+       * exists to avoid. Re-pricing an existing quote does not overwrite
+       * prices the analyst has already set.
+       */
+      if (applyTargets) {
+        const priced = lines.map((line, i) => {
+          const raw = byIndex[i]?.band.target;
+          if (raw === null || raw === undefined) return line;
+          const target = toCents(raw);
+          const qty = line.quantity || 0;
+          const discount = line.discount_applied || 0;
+          return {
+            ...line,
+            unit_price: target,
+            line_total: qty * target * (1 - discount / 100),
+          };
+        });
+        setQuoteLines(priced);
+      } else {
+        setQuoteLines(lines);
+      }
+    } catch (error) {
+      console.error('Pricing failed:', error);
+      setQuoteLines(lines);
+    } finally {
+      setPricing(false);
+    }
+  };
+
+  /*
+   * Reads an uploaded Channel Partners form into lines and prices them.
+   *
+   * A part number matching the catalogue becomes a catalogue line and can be
+   * priced from comparable history. One that does not is kept as a line
+   * carrying its part number: that is the configured-product case, and
+   * dropping it would lose the part of the quote the desk most needs to see.
+   *
+   * Quantities that failed validation are left empty rather than defaulted to
+   * one. An empty box is a question; a 1 is a wrong answer that looks right.
+   */
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const form = parseChannelPartnersForm(await file.text());
+
+    if (form.fatal.length > 0) {
+      setUploadReport({
+        fileName: file.name,
+        form,
+        matched: 0,
+        unmatchedParts: [],
+        inactiveParts: [],
+        requestId: null,
+        requestIdConflict: [],
+      });
+      return;
+    }
+
+    /*
+     * Part numbers resolve on the server against the whole catalogue rather
+     * than against the active-products list held here. An uploaded request
+     * can name a discontinued part, and that part still has a cost and a
+     * category to price from.
+     */
+    const partNumbers = form.lines
+      .map((l) => l.partNumber)
+      .filter((p): p is string => !!p);
+
+    const resolved = new Map<
+      string,
+      { productId: string; status: string | null; name: string }
+    >();
+    if (partNumbers.length > 0) {
+      try {
+        const matches = await trpcClient.reference.resolveParts.query({ partNumbers });
+        for (const m of matches) {
+          resolved.set(m.partNumber, {
+            productId: m.productId,
+            status: m.status,
+            name: m.name,
+          });
+        }
+      } catch (error) {
+        console.error('Part resolution failed:', error);
+      }
+    }
+
+    const unmatchedParts: string[] = [];
+    const inactiveParts: string[] = [];
+
+    const newLines: Partial<QuoteLine>[] = form.lines.map((l) => {
+      const match = l.partNumber ? resolved.get(l.partNumber.trim().toLowerCase()) : undefined;
+      if (l.partNumber && !match) unmatchedParts.push(l.partNumber);
+      if (l.partNumber && match && match.status !== 'Active') inactiveParts.push(l.partNumber);
+      return {
+        product_id: match?.productId ?? '',
+        source_part_number: l.partNumber,
+        quantity: l.quantity ?? undefined,
+        unit_price: 0,
+        discount_applied: 0,
+        line_total: 0,
+        entered_list_price: l.listPrice,
+        booked_cost: l.cost,
+      };
+    });
+
+    const { id, conflict } = requestIdOf(form);
+
+    setServiceLines([]);
+    setPricedLines({});
+    setLineType('products');
+    setUploadReport({
+      fileName: file.name,
+      form,
+      matched: newLines.length - unmatchedParts.length,
+      unmatchedParts,
+      inactiveParts,
+      requestId: id,
+      requestIdConflict: conflict,
+    });
+
+    await priceAllLines(newLines, true);
   };
 
   const addLine = () => {
@@ -614,14 +794,137 @@ export function QuoteBuilder() {
         <div className="p-4 border-b border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">Line Items</h3>
-            <button
-              onClick={addLine}
-              className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              <Plus size={16} />
-              Add Line
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.tsv,.txt,text/csv"
+                onChange={handleFileSelected}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                title="Upload a Channel Partners quote request"
+              >
+                <Upload size={16} />
+                Upload request
+              </button>
+              <button
+                onClick={() => priceAllLines(quoteLines)}
+                disabled={pricing || quoteLines.length === 0}
+                className="flex items-center gap-2 border border-blue-600 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                <Sparkles size={16} />
+                {pricing ? 'Pricing…' : 'Price lines'}
+              </button>
+              <button
+                onClick={addLine}
+                className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                <Plus size={16} />
+                Add Line
+              </button>
+            </div>
           </div>
+
+          {uploadReport && (() => {
+            const rowsWithErrors = uploadReport.form.lines.filter((l) => l.errors.length > 0);
+            const fatal = uploadReport.form.fatal.length > 0;
+            return (
+              <div
+                className={`mb-4 rounded-lg border p-3 text-sm ${
+                  fatal ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="font-medium text-gray-800">{uploadReport.fileName}</div>
+                  <button
+                    onClick={() => setUploadReport(null)}
+                    className="text-xs text-gray-500 hover:text-gray-800"
+                  >
+                    dismiss
+                  </button>
+                </div>
+
+                {fatal ? (
+                  <div className="mt-1 text-red-800">{uploadReport.form.fatal.join(' ')}</div>
+                ) : (
+                  <div className="mt-1 space-y-1 text-gray-700">
+                    <div>
+                      {uploadReport.form.lines.length} line
+                      {uploadReport.form.lines.length === 1 ? '' : 's'} read ·{' '}
+                      {uploadReport.matched} matched the catalogue
+                      {uploadReport.unmatchedParts.length > 0 && (
+                        <>
+                          {' '}· {uploadReport.unmatchedParts.length} not in the catalogue, kept as
+                          entered
+                        </>
+                      )}
+                    </div>
+
+                    {uploadReport.inactiveParts.length > 0 && (
+                      <div className="flex gap-1 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          {uploadReport.inactiveParts.length} part
+                          {uploadReport.inactiveParts.length === 1 ? ' is' : 's are'} marked
+                          inactive in the catalogue ({uploadReport.inactiveParts.join(', ')}). They
+                          are priced from their catalogue cost and history, but check whether they
+                          are still sellable.
+                        </span>
+                      </div>
+                    )}
+
+                    {uploadReport.requestId && (
+                      <div className="text-xs text-gray-600">
+                        Request <span className="font-medium">{uploadReport.requestId}</span>
+                      </div>
+                    )}
+
+                    {uploadReport.requestIdConflict.length > 0 && (
+                      <div className="flex gap-1 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          This file carries more than one request identifier (
+                          {uploadReport.requestIdConflict.join(', ')}), which usually means two
+                          requests were exported together. The returned win/loss and escalation
+                          files cannot be matched back unless one request is quoted at a time.
+                        </span>
+                      </div>
+                    )}
+
+                    {uploadReport.form.unmappedHeaders.length > 0 && (
+                      <div className="text-xs text-gray-500">
+                        Columns not used: {uploadReport.form.unmappedHeaders.join(', ')}
+                      </div>
+                    )}
+
+                    {rowsWithErrors.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        <div className="flex items-center gap-1 text-xs font-medium text-amber-800">
+                          <AlertTriangle size={13} />
+                          {rowsWithErrors.length} row
+                          {rowsWithErrors.length === 1 ? '' : 's'} need attention
+                        </div>
+                        {rowsWithErrors.slice(0, 8).map((l) => (
+                          <div key={l.rowNumber} className="text-xs text-amber-800 pl-4">
+                            Row {l.rowNumber}
+                            {l.partNumber ? ` (${l.partNumber})` : ''}: {l.errors.join(' ')}
+                          </div>
+                        ))}
+                        {rowsWithErrors.length > 8 && (
+                          <div className="text-xs text-amber-700 pl-4">
+                            and {rowsWithErrors.length - 8} more
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div className="flex gap-2 border-b border-gray-200 -mb-px">
             <button
               onClick={() => setLineType('products')}
@@ -663,6 +966,9 @@ export function QuoteBuilder() {
                   Unit Price
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Guidance
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Discount %
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -679,6 +985,25 @@ export function QuoteBuilder() {
                 <tr key={index}>
                   <td className="px-4 py-3">
                     <div className="space-y-1">
+                      {line.source_part_number && (
+                        <div className="text-xs">
+                          <span className="font-medium text-gray-800">
+                            {line.source_part_number}
+                          </span>
+                          {line.product_id &&
+                            !products.some((p) => p.id === line.product_id) && (
+                              <span
+                                className="ml-1 text-amber-700"
+                                title="Matched in the item master but not on the active product list, so it cannot be chosen from the dropdown below."
+                              >
+                                · inactive catalogue part
+                              </span>
+                            )}
+                          {!line.product_id && (
+                            <span className="ml-1 text-gray-500">· not in the catalogue</span>
+                          )}
+                        </div>
+                      )}
                       <input
                         type="text"
                         placeholder="Search products..."
@@ -730,6 +1055,16 @@ export function QuoteBuilder() {
                         setSelectedLineIndex(index);
                       }}
                       className="w-24 px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <PriceBandCell
+                      priced={pricedLines[index]}
+                      format={money}
+                      onApplyTarget={(price) => {
+                        updateLine(index, 'unit_price', toCents(price));
+                        setSelectedLineIndex(index);
+                      }}
                     />
                   </td>
                   <td className="px-4 py-3">
