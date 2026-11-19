@@ -59,7 +59,7 @@
  * a confident number built on the wrong one has no visible tell.
  */
 
-import { calculateCostPlus, marginOf, type MarginBasis } from './costPlus';
+import { calculateCostPlus, marginOf, type MarginBasis } from './costPlus.js';
 
 /** Minimum comparable lines before the cohort is usable. Mirrors server/dealScore.ts. */
 export const MIN_COMPARABLES = 5;

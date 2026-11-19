@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc.js';
 import { calculateDealScore } from '../dealScore.js';
 import { decideApproval, quoteFinancials, submitForApproval } from '../approvals.js';
+import { priceQuoteLines } from '../pricing/priceQuoteLines.js';
 
 /*
  * json_agg over a LEFT JOIN would produce `[null]` for a quote with no
@@ -253,6 +254,40 @@ export const quotesRouter = router({
           bySize: { rate: rate(bySize), sample: Number(bySize?.total ?? 0) },
         };
       })
+    ),
+
+  /*
+   * Prices every line of a quote in one call.
+   *
+   * The pilot uploads a Channel Partners form and expects the whole quote
+   * back priced, so this is deliberately not a per-line endpoint: pricing
+   * fifty lines issues the same four queries as pricing one. See
+   * server/pricing/priceQuoteLines.ts for where the evidence comes from.
+   *
+   * The line cap is a bound on the cohort query rather than a business rule.
+   * A quote beyond it should be split, and the client is told rather than
+   * silently truncated.
+   */
+  priceLines: protectedProcedure
+    .input(
+      z.object({
+        customerId: z.string().min(1).max(200).nullable().default(null),
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().max(200).nullable().default(null),
+              partNumber: z.string().max(200).nullable().default(null),
+              quantity: z.number().int().positive().max(1_000_000).nullable().default(null),
+              listPrice: z.number().nonnegative().max(1e12).nullable().default(null),
+              cost: z.number().nonnegative().max(1e12).nullable().default(null),
+            })
+          )
+          .min(1)
+          .max(500),
+      })
+    )
+    .query(({ ctx, input }) =>
+      ctx.withDb((db) => priceQuoteLines(db, input.customerId, input.lines))
     ),
 
   count: protectedProcedure.query(({ ctx }) =>

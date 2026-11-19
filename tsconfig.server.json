@@ -17,5 +17,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["server", "db"]
+  "include": ["server", "db", "scripts"],
+  /* Pre-migration Supabase seed scripts, kept for reference and not runnable.
+     They import @supabase/supabase-js, which is no longer a dependency. */
+  "exclude": ["scripts/legacy-supabase"]
 }

@@ -20,7 +20,7 @@ import {
   TARGET_PERCENTILE,
   CEILING_STDEV_MULTIPLE,
   type ComparableLine,
-} from '../src/utils/priceBands';
+} from '../server/pricing/priceBands.js';
 
 let passed = 0;
 const failures: string[] = [];
