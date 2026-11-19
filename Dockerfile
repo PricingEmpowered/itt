@@ -15,6 +15,12 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+
+# A checkout on Windows can turn this script's line endings into CRLF, which a
+# Linux shell rejects on its first line and the container then exits. Stripping
+# them here makes the image build the same whichever way the files arrived.
+RUN sed -i 's/\r$//' docker/demo-entrypoint.sh
+
 RUN npm run build
 
 ENV NODE_ENV=production
