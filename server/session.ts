@@ -56,7 +56,9 @@ export async function readSession(req: Request): Promise<SessionPayload | null> 
 /**
  * `secure` is set only in production: an on-premise install is often reached
  * over plain HTTP on an internal network during setup, and a secure cookie
- * would silently never be sent.
+ * would silently never be sent. SESSION_COOKIE_SECURE=false turns it off
+ * explicitly for a production build served over plain HTTP, such as a local
+ * demo; see ENV.sessionCookieSecure.
  *
  * `sameSite: 'lax'` suits a single-origin deployment where the API and the
  * built frontend are served by the same process.
@@ -64,7 +66,7 @@ export async function readSession(req: Request): Promise<SessionPayload | null> 
 function cookieOptions() {
   return {
     httpOnly: true,
-    secure: ENV.isProduction,
+    secure: ENV.sessionCookieSecure,
     sameSite: 'lax' as const,
     path: '/',
   };

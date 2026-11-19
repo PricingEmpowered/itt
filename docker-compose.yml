@@ -1,0 +1,48 @@
+# Price Space local demo: the app and a PostgreSQL 16 database.
+#
+#   docker compose up --build        then open http://localhost:4173
+#   docker compose down -v           stops it and throws the database away
+#
+# This is a demo, not a deployment. The secrets and passwords below are fixed and
+# public, the app connects to the database as its superuser, and the port is
+# bound to this machine only. See DEMO.md before using any of it anywhere else.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pricespace
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pricespace"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/pricespace
+      SESSION_SECRET: demo-only-secret-do-not-reuse-0123456789abcdef
+      # Plain HTTP on localhost: a Secure cookie would not stay signed in on Safari.
+      SESSION_COOKIE_SECURE: "false"
+      PORT: "3000"
+      AGGREGATE_REFRESH_MINUTES: "60"
+      DOCUMENT_ROOT: /app/var/documents
+      DEMO_ADMIN_PASSWORD: DemoAdmin-2026!
+      DEMO_REP_PASSWORD: DemoRep-2026!x
+    volumes:
+      - documents:/app/var/documents
+    ports:
+      # 127.0.0.1 keeps it off the network: only this machine can open it.
+      - "127.0.0.1:4173:3000"
+    restart: on-failure
+
+volumes:
+  pgdata:
+  documents:

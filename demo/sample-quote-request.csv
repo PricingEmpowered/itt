@@ -1,0 +1,6 @@
+Part No.,Description,Qty,List Price,Unit Cost,Request ID
+PROD-HIER-0002,Standard catalogue item,25,300.00,,RQ-20451
+PROD-HIER-0004,Standard catalogue item,12,600.00,,RQ-20451
+PROD-HIER-0006,Standard catalogue item,40,370.00,,RQ-20451
+CFG-ASSY-7731,Configured assembly,4,1450.00,780.00,RQ-20451
+CFG-ASSY-7732,Configured assembly,2,990.00,,RQ-20451

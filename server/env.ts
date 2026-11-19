@@ -58,6 +58,21 @@ export const ENV = {
   /** How long a session cookie stays valid. */
   sessionTtlMs: optionalNumber('SESSION_TTL_HOURS', 12) * 60 * 60 * 1000,
   /**
+   * Whether the session cookie is marked Secure, which makes a browser send it
+   * only over HTTPS. Unset, it follows production, as it always has.
+   *
+   * It exists as an explicit setting for one case: reaching a production build
+   * over plain HTTP, such as a demo on a laptop at http://localhost. Chrome and
+   * Firefox treat localhost as safe and accept a Secure cookie there; Safari
+   * does not, so the sign-in appears to work and the next request is anonymous.
+   * Only `false` turns it off, so a typo cannot weaken a deployment.
+   *
+   * A real install sits behind TLS and should leave this unset.
+   */
+  sessionCookieSecure:
+    process.env.SESSION_COOKIE_SECURE === 'false' ? false : isProduction,
+
+  /**
    * Natural-language analytics ("Ask AI") requires an outbound LLM endpoint.
    * An air-gapped install has none, so the feature is off unless explicitly
    * enabled and pointed at a reachable model. The frontend asks the server

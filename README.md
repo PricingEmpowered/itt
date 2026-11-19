@@ -7,6 +7,10 @@ workflow, deal scoring, commissions, and pricing analytics.
 Built to run **on-premise** — one Node process and a PostgreSQL database on
 the customer's own server, with no external services required at runtime.
 
+To look at the product without installing it, see [DEMO.md](DEMO.md): one
+`docker compose up` brings up the application and a demo database on your own
+machine.
+
 ## Requirements
 
 - Node.js 20 or newer
