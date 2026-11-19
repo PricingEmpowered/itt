@@ -58,11 +58,19 @@ const DEMO_SEEDS = [
 ];
 
 /*
- * Four features were migrated twice under near-identical filenames, so the
- * later file of each pair re-issues CREATE POLICY for policies that already
- * exist and aborts. Postgres has no CREATE POLICY IF NOT EXISTS, so make each
- * statement idempotent by dropping first. This is safe because a policy is
- * fully redefined by the statement that follows.
+ * Five features were originally migrated twice under near-identical
+ * filenames, and the later file of each pair re-issued CREATE POLICY for
+ * policies that already existed, aborting the run. Postgres has no
+ * CREATE POLICY IF NOT EXISTS, so each statement is made idempotent by
+ * dropping first. This is safe because a policy is fully redefined by the
+ * statement that follows.
+ *
+ * The duplicate files have since been removed - the pairs carried identical
+ * SQL and differed only in their header comments - so nothing in the tree
+ * re-issues a policy today. This stays because it costs nothing, because a
+ * database migrated before the cleanup still carries both keys in
+ * schema_migrations, and because the next duplicate would otherwise abort a
+ * run rather than no-op.
  */
 function makePoliciesIdempotent(sql) {
   return sql.replace(
