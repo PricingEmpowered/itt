@@ -434,9 +434,20 @@ export function QuoteBuilder() {
         if (servicesError) throw servicesError;
       }
 
-      const { data: tiers } = await supabase.from('commission_tiers').select('*').eq('is_active', true);
+      // The quote and its lines are already saved at this point, so a commission
+      // failure must not look like a failed save (the user would retry and create
+      // a duplicate quote) -- but it must not be silent either.
+      let commissionFailure: string | null = null;
 
-      if (tiers && tiers.length > 0) {
+      const { data: tiers, error: tiersError } = await supabase
+        .from('commission_tiers')
+        .select('*')
+        .eq('is_active', true);
+
+      if (tiersError) {
+        console.error('Error loading commission tiers for quote', quoteId, tiersError);
+        commissionFailure = tiersError.message;
+      } else if (tiers && tiers.length > 0) {
         const dealSize = total * exchangeRate;
         const dealScore = scoreResult.score;
 
@@ -455,12 +466,20 @@ export function QuoteBuilder() {
           const totalPercent = basePercent + bonusPercent;
           const commissionAmount = dealSize * (totalPercent / 100);
 
-          await supabase.from('sales_commissions').insert({
+          // sales_commissions.deal_score is an integer column, while the score is
+          // computed to 2 decimals (e.g. 153.92) and kept at full precision on
+          // quotes.deal_score (NUMERIC(6,2)). Store a whole-number snapshot here.
+          // The bonus decision above deliberately still uses the unrounded score.
+          const commissionDealScore = dealScore === null || dealScore === undefined
+            ? null
+            : Math.round(dealScore);
+
+          const { error: commissionError } = await supabase.from('sales_commissions').insert({
             quote_id: quoteId,
             sales_rep_id: userData.user.id,
             sales_rep_email: userData.user.email || 'unknown',
             deal_size: dealSize,
-            deal_score: dealScore,
+            deal_score: commissionDealScore,
             commission_tier_id: applicableTier.id,
             base_commission_percent: basePercent,
             deal_score_bonus_percent: bonusPercent,
@@ -468,10 +487,22 @@ export function QuoteBuilder() {
             commission_amount: commissionAmount,
             status: 'pending'
           });
+
+          if (commissionError) {
+            console.error('Error saving commission for quote', quoteId, commissionError);
+            commissionFailure = commissionError.message;
+          }
         }
       }
 
-      alert(`Quote ${quoteId} created successfully!`);
+      if (commissionFailure) {
+        alert(
+          `Quote ${quoteId} was saved, but its commission record could not be created ` +
+          `(${commissionFailure}). Please report this so the commission can be added.`
+        );
+      } else {
+        alert(`Quote ${quoteId} created successfully!`);
+      }
       setQuoteLines([]);
       setServiceLines([]);
       setSelectedCustomer('');
