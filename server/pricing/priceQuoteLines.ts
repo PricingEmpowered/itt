@@ -62,6 +62,15 @@ export interface PriceLineRequest {
   listPrice?: number | null;
   /** Per-unit cost from the form, if it carried one. Overrides the catalogue. */
   cost?: number | null;
+  /**
+   * Product line as Channel Partners named it. Preferred over the catalogue's
+   * family name when choosing the approval margin: the file is ITT's own
+   * statement of what the line is, and a configured part has no catalogue row
+   * to take a family from at all.
+   */
+  productLine?: string | null;
+  /** Quoting region from the file. Preferred over the customer's region. */
+  region?: string | null;
 }
 
 export interface PricedLine {
@@ -274,8 +283,17 @@ export async function priceQuoteLines(
 
     const basis = rule?.margin_basis === 'markup' ? 'markup' : DEFAULT_FALLBACK_BASIS;
     const fallbackRate = num(rule?.standard_rate ?? null) ?? DEFAULT_FALLBACK_RATE;
-    /* A product line is its family name; a part with no family matches only the defaults. */
-    const authority = resolveFloor(floors, AUTHORITY_LEVEL, product?.family_name ?? null, regionName);
+    /*
+     * The file's own product line and quoting region win when it supplied them.
+     * Otherwise a product line is the catalogue family name, and a part with no
+     * family matches only the defaults.
+     */
+    const authority = resolveFloor(
+      floors,
+      AUTHORITY_LEVEL,
+      line.productLine ?? product?.family_name ?? null,
+      line.region ?? regionName
+    );
     const minimumMargin = authority.minimumMargin;
 
     const band = calculatePriceBand({

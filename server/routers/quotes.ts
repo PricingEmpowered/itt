@@ -280,6 +280,8 @@ export const quotesRouter = router({
               quantity: z.number().int().positive().max(1_000_000).nullable().default(null),
               listPrice: z.number().nonnegative().max(1e12).nullable().default(null),
               cost: z.number().nonnegative().max(1e12).nullable().default(null),
+              productLine: z.string().max(200).nullable().default(null),
+              region: z.string().max(100).nullable().default(null),
             })
           )
           .min(1)

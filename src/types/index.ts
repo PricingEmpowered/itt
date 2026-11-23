@@ -168,6 +168,16 @@ export interface QuoteLine {
   entered_list_price?: number | null;
   /* Per-unit cost booked against the line at quote time. */
   booked_cost?: number | null;
+  /* Minimum order quantity the price applies at. Not a quantity ordered. */
+  min_qty?: number | null;
+  /* What Channel Partners sent, carried so results can be matched back. */
+  source_item_id?: string | null;
+  source_product_line?: string | null;
+  source_region?: string | null;
+  source_currency?: string | null;
+  /* Prices asked for. Information only: not ITT's selling price. */
+  requested_resale_price?: number | null;
+  requested_distributor_price?: number | null;
 }
 
 export interface ApprovalRequest {

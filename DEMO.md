@@ -17,8 +17,11 @@ docker compose up --build
 
 The first run takes a few minutes: it builds the application, creates the
 database, loads the schema and about 900 demo quotes, and creates two logins.
-The demo data is the same on every machine, so the numbers below will match
-what you see.
+The demo data is the same on every machine, so the numbers below will match what
+you see on a fresh install. Prices are compared against the last twelve months of
+quote history, and the demo history is dated relative to the day you install it.
+The targets therefore drift by a few cents as the weeks pass, and after about six
+months there is no history left to compare against.
 Wait for the line `Price Space API listening`, then open:
 
 **http://localhost:4173**
@@ -37,7 +40,11 @@ Only your own machine can open that address.
 1. **Quotes, then Create Quote.** Choose any customer.
 2. **Upload request.** Choose `demo/sample-quote-request.csv` from this folder.
    Five lines come back priced, each with a floor, target and ceiling. The first
-   line, `PROD-HIER-0002`, should show a target of $232.41.
+   line, `PROD-HIER-0002`, should show a target of about $232.
+   To try the real Channel Partners layout instead, upload
+   `demo/sample-channel-partners-export.tsv`: a tab-separated file with the
+   export's 101 columns and invented values. Its amounts are in EUR, one line is
+   marked deleted and left out, and each line keeps its Channel Partners item ID.
 3. **Click "why"** on a line to see how its numbers were worked out.
 4. **Change the unit price** on the first line to 190. Its margin drops to 24.0%,
    under the 30% minimum, so the line is flagged as needing approval and the

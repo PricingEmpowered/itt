@@ -1,24 +1,43 @@
 /**
- * Reads an uploaded Channel Partners quote request into quote lines.
+ * Reads an uploaded Channel Partners quote export into quote lines.
  *
- * ## This file is the seam, and that is its whole purpose
+ * ## This file is the seam
  *
- * ITT has not yet supplied the real export layout. Rather than guess once
- * and scatter the guess through the upload screen, every assumption about
- * the file lives here: which headers mean what, which columns are required,
- * and how a row becomes a line. When the real layout arrives, the change is
- * COLUMNS and nothing else.
+ * Every assumption about the export's layout lives here: which headers mean
+ * what, which are required, and how a row becomes a line. The layout is
+ * ITT's, not ours, so when it changes the edit is the COLUMNS map and nothing
+ * else.
+ *
+ * ## What the real export looks like
+ *
+ * It is a tab-separated dump of about a hundred columns, most of them empty,
+ * with the text NULL written wherever a value is missing. Column names are
+ * upper-case with underscores (PART_NO, QTY_MOQ, COST_ESTIMATED). A few of
+ * those columns look interchangeable and are not, so the choices below are
+ * deliberate:
+ *
+ *   cost        COST_ESTIMATED. ITT's own margin reconciles to
+ *               (price - cost_estimated) / price, which is how this was
+ *               established. BOOK_COST is deliberately NOT read as a cost: it
+ *               is a different basis that ITT has not defined, and on the
+ *               sample it exceeds the price asked for, which as a cost would
+ *               be a negative margin on every line that carries it.
+ *   list price  no column in the export is known to be one, so none is read.
+ *               A column literally named list price is still accepted.
+ *   part        PART_NO is the catalogue number; PART_NO_MANUF is the
+ *               internal one. Both are carried so either can find the part.
+ *   requested   REQ_TARGET_PRICE_RESALE and _DISTR are what a distributor
+ *               or its customer asked for. They are not ITT's selling price,
+ *               so they are kept as information and never compared with a
+ *               price band.
  *
  * ## Headers are matched loosely, values are read strictly
  *
- * Header matching is case-insensitive, ignores punctuation and spacing, and
- * accepts several spellings, because "Part No." and "part_number" are the
- * same column and a pilot should not fail on a capital letter.
- *
- * Values get the opposite treatment. A quantity that cannot be read becomes
- * an error on that row, never a 1; a price that cannot be read becomes an
- * error, never a 0. On a system whose output is quoted to customers, a
- * silently defaulted number is the failure with no tell.
+ * Header matching ignores case, spacing and punctuation, so "Part No." and
+ * PART_NO are the same column. Values get the opposite treatment: a quantity
+ * that cannot be read becomes an error on that row, never a 1; a price that
+ * cannot be read becomes an error, never a 0. On a system whose output is
+ * quoted to customers, a silently defaulted number is the failure with no tell.
  *
  * ## Rows are kept even when they are wrong
  *
@@ -28,17 +47,38 @@
  * what went missing.
  */
 
-import { parseCsv, parseNumber } from './csv';
+import { detectDelimiter, parseCsv, parseNumber } from './csv';
 
 /** Field names this module produces, mapped to the headers it will accept. */
 const COLUMNS = {
-  partNumber: ['part number', 'part no', 'part', 'part num', 'item', 'item number', 'item no', 'sku', 'material', 'material number'],
-  description: ['description', 'desc', 'item description', 'part description', 'product description'],
+  /* PART_NO: the catalogue number. */
+  partNumber: ['part number', 'part no', 'part', 'part num', 'item number', 'item no', 'sku', 'material', 'material number'],
+  /* PART_NO_MANUF: the internal number. */
+  altPartNumber: ['part no manuf', 'internal part number', 'manufacturer part number'],
+  description: ['description', 'desc', 'item description', 'part description', 'product description', 'part no descr'],
   quantity: ['quantity', 'qty', 'order qty', 'order quantity', 'requested qty', 'req qty'],
+  /* The minimum order quantity the price applies at. Not a quantity ordered. */
+  moq: ['qty moq', 'moq', 'min order qty', 'minimum order quantity'],
   listPrice: ['list price', 'list', 'unit list price', 'list price usd', 'list amount', 'unit list'],
-  cost: ['cost', 'unit cost', 'standard cost', 'booked cost', 'std cost'],
+  /* Per-unit cost. COST_ESTIMATED, and never BOOK_COST: see the header note. */
+  cost: ['cost estimated', 'cost', 'unit cost', 'standard cost', 'std cost'],
+  /* What a distributor or its customer asked for. Information only. */
+  requestedResalePrice: ['req target price resale'],
+  requestedDistributorPrice: ['req target price distr'],
+  productLine: ['product line', 'internal product line'],
+  /* The region doing the quoting. */
+  region: ['quoting region descr i', 'quoting region', 'region'],
+  currency: ['currency given', 'currency target', 'currency'],
+  /* The Channel Partners key for the line. It has to survive the round trip. */
+  itemId: ['itemid', 'item id'],
   requestId: ['request id', 'request number', 'request no', 'quote id', 'quote number', 'quote ref', 'rfq', 'rfq number'],
   customer: ['customer', 'customer name', 'customer id', 'account', 'account name', 'sold to'],
+  /* Flags that mean a line should not be priced. */
+  isDeleted: ['is deleted'],
+  isInactive: ['inactive'],
+  isRejected: ['reject'],
+  /* Present only on quotes that already have an outcome. */
+  outcome: ['order status descr'],
 } as const;
 
 export type FieldName = keyof typeof COLUMNS;
@@ -50,12 +90,28 @@ export interface UploadedLine {
   /** 1-based row number in the file, counting the header. For error messages. */
   rowNumber: number;
   partNumber: string | null;
+  altPartNumber: string | null;
   description: string | null;
   quantity: number | null;
+  moq: number | null;
   listPrice: number | null;
   cost: number | null;
+  requestedResalePrice: number | null;
+  requestedDistributorPrice: number | null;
+  productLine: string | null;
+  region: string | null;
+  currency: string | null;
+  itemId: string | null;
   requestId: string | null;
   customer: string | null;
+  /** An outcome such as "Won", when the export already carries one. */
+  outcome: string | null;
+  /**
+   * Channel Partners itself has deleted, deactivated or rejected this line. It
+   * is reported and left out of the quote, unlike a line with a bad value, which
+   * stays so that someone can correct it.
+   */
+  withdrawn: boolean;
   /** Empty when the row is usable. */
   errors: string[];
 }
@@ -68,6 +124,14 @@ export interface ParsedForm {
   missingRequired: FieldName[];
   /** Headers present in the file that this module does not use. */
   unmappedHeaders: string[];
+  /** The field separator that was detected. */
+  delimiter: string;
+  /** The single currency the file is in, or null if absent or mixed. */
+  currency: string | null;
+  /** Currencies seen, when there is more than one. */
+  mixedCurrencies: string[];
+  /** How many lines already carry an outcome, which means this is history. */
+  linesWithOutcome: number;
   /** File-level problems. Non-empty means nothing was read. */
   fatal: string[];
 }
@@ -77,10 +141,21 @@ function normaliseHeader(h: string): string {
   return h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/**
+ * The export writes the text NULL for a missing value. That is an empty cell,
+ * not a part called NULL, and must never reach a price or a part lookup.
+ */
 function blankToNull(s: string | undefined): string | null {
   if (s === undefined) return null;
   const t = s.trim();
-  return t === '' ? null : t;
+  if (t === '' || t.toUpperCase() === 'NULL') return null;
+  return t;
+}
+
+/** A flag column: 1, true or yes. Anything else, including NULL, is off. */
+function isFlagSet(v: string | null): boolean {
+  if (v === null) return false;
+  return ['1', 'true', 'yes', 'y'].includes(v.trim().toLowerCase());
 }
 
 export function parseChannelPartnersForm(text: string): ParsedForm {
@@ -89,33 +164,49 @@ export function parseChannelPartnersForm(text: string): ParsedForm {
     matchedHeaders: {},
     missingRequired: [],
     unmappedHeaders: [],
+    delimiter: ',',
+    currency: null,
+    mixedCurrencies: [],
+    linesWithOutcome: 0,
     fatal: [],
   };
 
-  const rows = parseCsv(text);
+  const delimiter = detectDelimiter(text);
+  const rows = parseCsv(text, { delimiter });
   if (rows.length === 0) {
-    return { ...empty, fatal: ['The file is empty.'] };
+    return { ...empty, delimiter, fatal: ['The file is empty.'] };
   }
 
   const headerRow = rows[0].map(normaliseHeader);
   const dataRows = rows.slice(1);
 
-  /* Map each known field to the first header that matches one of its spellings. */
-  const indexOf: Partial<Record<FieldName, number>> = {};
+  /*
+   * Map each known field to the columns that can supply it, in the order the
+   * spellings are listed in COLUMNS. That order is a priority, not a set: the
+   * export has CURRENCY_TARGET ahead of CURRENCY_GIVEN, and picking whichever
+   * came first in the file read the wrong one. A field can match several
+   * columns; the first is the primary and the rest are fallbacks for a row
+   * where the primary is empty. A column supplies only one field.
+   */
+  const columnsFor: Partial<Record<FieldName, number[]>> = {};
   const matchedHeaders: Partial<Record<FieldName, string>> = {};
   const usedIndexes = new Set<number>();
 
   for (const field of Object.keys(COLUMNS) as FieldName[]) {
     const accepted: readonly string[] = COLUMNS[field];
-    const i = headerRow.findIndex((h, idx) => !usedIndexes.has(idx) && accepted.includes(h));
-    if (i !== -1) {
-      indexOf[field] = i;
-      matchedHeaders[field] = rows[0][i].trim();
-      usedIndexes.add(i);
+    const found: number[] = [];
+    for (const spelling of accepted) {
+      const i = headerRow.findIndex((h, idx) => h === spelling && !usedIndexes.has(idx));
+      if (i !== -1) found.push(i);
+    }
+    if (found.length > 0) {
+      columnsFor[field] = found;
+      matchedHeaders[field] = rows[0][found[0]].trim();
+      found.forEach((i) => usedIndexes.add(i));
     }
   }
 
-  const missingRequired = REQUIRED.filter((f) => indexOf[f] === undefined);
+  const missingRequired = REQUIRED.filter((f) => columnsFor[f] === undefined);
   const unmappedHeaders = rows[0]
     .map((h, i) => ({ h: h.trim(), i }))
     .filter(({ h, i }) => h !== '' && !usedIndexes.has(i))
@@ -124,19 +215,53 @@ export function parseChannelPartnersForm(text: string): ParsedForm {
   if (missingRequired.length > 0) {
     return {
       ...empty,
+      delimiter,
       matchedHeaders,
       missingRequired,
       unmappedHeaders,
       fatal: [
         `The file has no column for ${missingRequired.join(' or ')}. ` +
-          `Found: ${rows[0].map((h) => h.trim()).filter(Boolean).join(', ') || '(no headers)'}.`,
+          `Found: ${
+            rows[0]
+              .map((h) => h.trim())
+              .filter(Boolean)
+              .slice(0, 12)
+              .join(', ') || '(no headers)'
+          }${rows[0].length > 12 ? ', …' : ''}.`,
       ],
     };
   }
 
+  /** The first non-empty value among the columns that can supply this field. */
   const cell = (row: string[], field: FieldName): string | null => {
-    const i = indexOf[field];
-    return i === undefined ? null : blankToNull(row[i]);
+    for (const i of columnsFor[field] ?? []) {
+      const value = blankToNull(row[i]);
+      if (value !== null) return value;
+    }
+    return null;
+  };
+
+  /** Reads an optional number, recording an error for one that is present and unreadable. */
+  const optionalNumber = (
+    row: string[],
+    field: FieldName,
+    label: string,
+    errors: string[],
+    options: { allowZero?: boolean } = {}
+  ): number | null => {
+    const raw = cell(row, field);
+    if (raw === null) return null;
+    const n = parseNumber(raw);
+    if (n === null) {
+      errors.push(`${label} "${raw}" is not a number.`);
+      return null;
+    }
+    if (n < 0) {
+      errors.push(`${label} ${n} is negative.`);
+      return null;
+    }
+    if (n === 0 && !options.allowZero) return null;
+    return n;
   };
 
   const lines: UploadedLine[] = [];
@@ -165,46 +290,87 @@ export function parseChannelPartnersForm(text: string): ParsedForm {
       errors.push(`Quantity ${quantity} is not a whole number.`);
     }
 
-    const listRaw = cell(row, 'listPrice');
-    const listPrice = parseNumber(listRaw);
-    if (listRaw !== null && listPrice === null) {
-      errors.push(`List price "${listRaw}" is not a number.`);
-    } else if (listPrice !== null && listPrice < 0) {
-      errors.push(`List price ${listPrice} is negative.`);
+    /*
+     * A zero in a price or cost column is "not supplied", not a price of
+     * nothing: the export writes 0 as well as NULL for an unset figure (it did
+     * on PRICE_TRANSFER). Zero is therefore read as absent, and a cost of zero
+     * can never become a margin.
+     */
+    const listPrice = optionalNumber(row, 'listPrice', 'List price', errors);
+    const cost = optionalNumber(row, 'cost', 'Cost', errors);
+    const requestedResalePrice = optionalNumber(row, 'requestedResalePrice', 'Requested resale price', errors);
+    const requestedDistributorPrice = optionalNumber(
+      row,
+      'requestedDistributorPrice',
+      'Requested distributor price',
+      errors
+    );
+    const moq = optionalNumber(row, 'moq', 'Minimum order quantity', errors);
+
+    /* Lines Channel Partners itself has withdrawn must not be priced. */
+    let withdrawn = false;
+    if (isFlagSet(cell(row, 'isDeleted'))) {
+      errors.push('Deleted in Channel Partners.');
+      withdrawn = true;
+    }
+    if (isFlagSet(cell(row, 'isInactive'))) {
+      errors.push('Marked inactive in Channel Partners.');
+      withdrawn = true;
+    }
+    if (isFlagSet(cell(row, 'isRejected'))) {
+      errors.push('Rejected in Channel Partners.');
+      withdrawn = true;
     }
 
-    const costRaw = cell(row, 'cost');
-    const cost = parseNumber(costRaw);
-    if (costRaw !== null && cost === null) {
-      errors.push(`Cost "${costRaw}" is not a number.`);
-    } else if (cost !== null && cost < 0) {
-      errors.push(`Cost ${cost} is negative.`);
-    }
+    const currency = cell(row, 'currency');
 
     lines.push({
       rowNumber,
       partNumber,
+      altPartNumber: cell(row, 'altPartNumber'),
       description: cell(row, 'description'),
       quantity: quantity !== null && quantity > 0 && Number.isInteger(quantity) ? quantity : null,
-      listPrice: listPrice !== null && listPrice >= 0 ? listPrice : null,
-      cost: cost !== null && cost >= 0 ? cost : null,
+      moq: moq !== null && Number.isInteger(moq) ? moq : null,
+      listPrice,
+      cost,
+      requestedResalePrice,
+      requestedDistributorPrice,
+      productLine: cell(row, 'productLine'),
+      region: cell(row, 'region'),
+      currency: currency === null ? null : currency.toUpperCase(),
+      itemId: cell(row, 'itemId'),
       requestId: cell(row, 'requestId'),
       customer: cell(row, 'customer'),
+      outcome: cell(row, 'outcome'),
+      withdrawn,
       errors,
     });
   });
 
-  return { lines, matchedHeaders, missingRequired: [], unmappedHeaders, fatal: [] };
+  const currencies = [...new Set(lines.map((l) => l.currency).filter((c): c is string => !!c))];
+
+  return {
+    lines,
+    matchedHeaders,
+    missingRequired: [],
+    unmappedHeaders,
+    delimiter,
+    currency: currencies.length === 1 ? currencies[0] : null,
+    mixedCurrencies: currencies.length > 1 ? currencies : [],
+    linesWithOutcome: lines.filter((l) => l.outcome !== null).length,
+    fatal: [],
+  };
 }
 
 /**
  * The request identifier, if the file carried one and agreed with itself.
  *
- * This matters more than it looks: the identifier has to survive the round
- * trip out to Price Space and back, or the monthly win/loss and escalation
- * returns cannot be matched to the quotes they describe. A file carrying two
- * different identifiers is a sign the export merged two requests, which is
- * worth refusing rather than guessing at.
+ * Only an explicit request column is read. The export's per-line key is
+ * ITEMID, carried on each line, which is what has to come back; grouping
+ * lines into a request is not guessed from some other column.
+ *
+ * A file carrying two different identifiers is a sign the export merged two
+ * requests, which is worth refusing rather than guessing at.
  */
 export function requestIdOf(form: ParsedForm): { id: string | null; conflict: string[] } {
   const ids = [...new Set(form.lines.map((l) => l.requestId).filter((v): v is string => !!v))];

@@ -98,6 +98,41 @@ export function parseCsv(text: string, options: CsvOptions = {}): string[][] {
 }
 
 /**
+ * Works out which character separates the fields, from the header line.
+ *
+ * Channel Partners exports tab-separated, a spreadsheet saved as CSV uses
+ * commas, and some European locales use semicolons. Assuming commas turned a
+ * tab-separated export into a single enormous column, so the separator is read
+ * from the first line instead: whichever of the three appears most, outside
+ * quotes. A tie, or none at all, is a comma.
+ */
+export function detectDelimiter(text: string): string {
+  const input = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const counts: Record<string, number> = { '\t': 0, ',': 0, ';': 0 };
+  let inQuotes = false;
+
+  for (const ch of input) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes) {
+      if (ch === '\n' || ch === '\r') break;
+      if (ch in counts) counts[ch]++;
+    }
+  }
+
+  /* Starts at comma, so a tie or an empty header stays a comma; another must beat it outright. */
+  let best = ',';
+  let bestCount = counts[','];
+  for (const candidate of ['\t', ';']) {
+    if (counts[candidate] > bestCount) {
+      best = candidate;
+      bestCount = counts[candidate];
+    }
+  }
+  return best;
+}
+
+/**
  * Reads a number the way a spreadsheet exports one.
  *
  * Accepts thousands separators, a leading currency symbol, surrounding

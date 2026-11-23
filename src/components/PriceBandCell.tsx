@@ -24,12 +24,30 @@ interface Props {
   /** The price as currently entered, so the approval flag follows the analyst's edits. */
   unitPrice: number | null | undefined;
   discountPercent: number | null | undefined;
+  /**
+   * What a distributor or its customer asked for, per unit. Shown as
+   * information and never compared with the band: it is not ITT's selling
+   * price, so measuring it against ITT's floor would compare two different things.
+   */
+  requestedResale?: number | null;
+  requestedDistributor?: number | null;
+  /** The currency those amounts are in, from the file. */
+  currency?: string | null;
   /** Applies the target to the line's unit price. */
   onApplyTarget: (price: number) => void;
   format: (value: number) => string;
 }
 
-export function PriceBandCell({ priced, unitPrice, discountPercent, onApplyTarget, format }: Props) {
+export function PriceBandCell({
+  priced,
+  unitPrice,
+  discountPercent,
+  requestedResale,
+  requestedDistributor,
+  currency,
+  onApplyTarget,
+  format,
+}: Props) {
   const [showRationale, setShowRationale] = useState(false);
 
   if (!priced) {
@@ -90,6 +108,19 @@ export function PriceBandCell({ priced, unitPrice, discountPercent, onApplyTarge
           </span>
         </span>
       </div>
+
+      {(requestedResale || requestedDistributor) && (
+        <div className="text-[11px] text-gray-500">
+          Asked for:{' '}
+          {[
+            requestedResale ? `${requestedResale.toFixed(2)} resale` : null,
+            requestedDistributor ? `${requestedDistributor.toFixed(2)} distributor` : null,
+          ]
+            .filter(Boolean)
+            .join(', ')}
+          {currency ? ` ${currency}` : ''}
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5 flex-wrap">
         <span

@@ -48,6 +48,9 @@ export function QuoteBuilder() {
     matched: number;
     unmatchedParts: string[];
     inactiveParts: string[];
+    ambiguousParts: string[];
+    /** Lines Channel Partners has deleted, deactivated or rejected, left out of the quote. */
+    withdrawn: Array<{ rowNumber: number; partNumber: string | null; reasons: string[] }>;
     requestId: string | null;
     requestIdConflict: string[];
   } | null>(null);
@@ -193,6 +196,8 @@ export function QuoteBuilder() {
       quantity: l.quantity ?? null,
       listPrice: l.entered_list_price ?? null,
       cost: l.booked_cost ?? null,
+      productLine: l.source_product_line ?? null,
+      region: l.source_region ?? null,
     }));
     if (payload.length === 0) return;
 
@@ -264,6 +269,8 @@ export function QuoteBuilder() {
         matched: 0,
         unmatchedParts: [],
         inactiveParts: [],
+        ambiguousParts: [],
+        withdrawn: [],
         requestId: null,
         requestIdConflict: [],
       });
@@ -271,29 +278,38 @@ export function QuoteBuilder() {
     }
 
     /*
-     * Part numbers resolve on the server against the whole catalogue rather
-     * than against the active-products list held here. An uploaded request
-     * can name a discontinued part, and that part still has a cost and a
-     * category to price from.
+     * Lines Channel Partners has itself deleted, deactivated or rejected are
+     * reported and left out. A line with a bad value is different: it stays, so
+     * that someone can correct it, which is why only the first kind is removed.
      */
-    const partNumbers = form.lines
-      .map((l) => l.partNumber)
-      .filter((p): p is string => !!p);
+    const withdrawn = form.lines
+      .filter((l) => l.withdrawn)
+      .map((l) => ({ rowNumber: l.rowNumber, partNumber: l.partNumber, reasons: l.errors }));
+    const usable = form.lines.filter((l) => !l.withdrawn);
 
-    const resolved = new Map<
-      string,
-      { productId: string; status: string | null; name: string }
-    >();
-    if (partNumbers.length > 0) {
+    /*
+     * Part numbers resolve on the server against the whole catalogue rather
+     * than against the active-products list held here. An uploaded request can
+     * name a discontinued part, and that part still has a cost and a category
+     * to price from. Both the catalogue number and the internal number are sent,
+     * so either can find the part.
+     */
+    const partIndexOfLine = new Map<number, number>();
+    const parts: Array<{ partNumber: string; altPartNumber: string | null }> = [];
+    usable.forEach((l, i) => {
+      if (l.partNumber) {
+        partIndexOfLine.set(i, parts.length);
+        parts.push({ partNumber: l.partNumber, altPartNumber: l.altPartNumber });
+      }
+    });
+
+    const resolved = new Map<number, { productId: string; status: string | null }>();
+    const ambiguousAt = new Set<number>();
+    if (parts.length > 0) {
       try {
-        const matches = await trpcClient.reference.resolveParts.query({ partNumbers });
-        for (const m of matches) {
-          resolved.set(m.partNumber, {
-            productId: m.productId,
-            status: m.status,
-            name: m.name,
-          });
-        }
+        const { matches, ambiguous } = await trpcClient.reference.resolveParts.query({ parts });
+        for (const m of matches) resolved.set(m.index, { productId: m.productId, status: m.status });
+        for (const a of ambiguous) ambiguousAt.add(a.index);
       } catch (error) {
         console.error('Part resolution failed:', error);
       }
@@ -301,10 +317,16 @@ export function QuoteBuilder() {
 
     const unmatchedParts: string[] = [];
     const inactiveParts: string[] = [];
+    const ambiguousParts: string[] = [];
 
-    const newLines: Partial<QuoteLine>[] = form.lines.map((l) => {
-      const match = l.partNumber ? resolved.get(l.partNumber.trim().toLowerCase()) : undefined;
-      if (l.partNumber && !match) unmatchedParts.push(l.partNumber);
+    const newLines: Partial<QuoteLine>[] = usable.map((l, i) => {
+      const at = partIndexOfLine.get(i);
+      const match = at === undefined ? undefined : resolved.get(at);
+      if (l.partNumber && at !== undefined && ambiguousAt.has(at)) {
+        ambiguousParts.push(l.partNumber);
+      } else if (l.partNumber && !match) {
+        unmatchedParts.push(l.partNumber);
+      }
       if (l.partNumber && match && match.status !== 'Active') inactiveParts.push(l.partNumber);
       return {
         product_id: match?.productId ?? '',
@@ -315,6 +337,13 @@ export function QuoteBuilder() {
         line_total: 0,
         entered_list_price: l.listPrice,
         booked_cost: l.cost,
+        min_qty: l.moq,
+        source_item_id: l.itemId,
+        source_product_line: l.productLine,
+        source_region: l.region,
+        source_currency: l.currency ?? form.currency,
+        requested_resale_price: l.requestedResalePrice,
+        requested_distributor_price: l.requestedDistributorPrice,
       };
     });
 
@@ -326,9 +355,11 @@ export function QuoteBuilder() {
     setUploadReport({
       fileName: file.name,
       form,
-      matched: newLines.length - unmatchedParts.length,
+      matched: newLines.length - unmatchedParts.length - ambiguousParts.length,
       unmatchedParts,
       inactiveParts,
+      ambiguousParts,
+      withdrawn,
       requestId: id,
       requestIdConflict: conflict,
     });
@@ -524,6 +555,17 @@ export function QuoteBuilder() {
       return;
     }
 
+    /*
+     * A line has to identify its part, as a catalogue product or as the part
+     * number it arrived with. The database enforces the same thing, but by then
+     * the quote header has been written, so say so before writing anything.
+     */
+    const unidentified = quoteLines.findIndex((l) => !l.product_id && !l.source_part_number);
+    if (unidentified !== -1) {
+      alert(`Line ${unidentified + 1} has no product and no part number. Choose a product or remove the line.`);
+      return;
+    }
+
     try {
       const { subtotal, tax, total } = calculateTotals();
       const quoteId = `Q-${Date.now()}`;
@@ -558,14 +600,43 @@ export function QuoteBuilder() {
       if (quoteError) throw quoteError;
 
       if (quoteLines.length > 0) {
-        const linesToInsert = quoteLines.map((line) => ({
-          quote_id: quoteId,
-          product_id: line.product_id,
-          quantity: line.quantity,
-          unit_price: line.unit_price,
-          discount_applied: line.discount_applied,
-          line_total: line.line_total,
-        }));
+        /*
+         * Every row carries the same keys, with null where there is nothing:
+         * the insert is one multi-row statement built from the first row's keys.
+         *
+         * The pricing is saved as it was shown. The analyst adjusted a price
+         * against this band and this reasoning, and a band recomputed later, after
+         * a cost change or a rule edit, would not be the one they saw.
+         */
+        const pricedAt = new Date().toISOString();
+        const linesToInsert = quoteLines.map((line, i) => {
+          const band = pricedLines[i]?.band ?? null;
+          return {
+            quote_id: quoteId,
+            /* Empty means a configured or custom part. NULL, not '': the foreign key rejects ''. */
+            product_id: line.product_id || null,
+            quantity: line.quantity ?? null,
+            unit_price: line.unit_price ?? null,
+            discount_applied: line.discount_applied ?? null,
+            line_total: line.line_total ?? null,
+            source_part_number: line.source_part_number ?? null,
+            entered_list_price: line.entered_list_price ?? null,
+            booked_cost: line.booked_cost ?? null,
+            min_qty: line.min_qty ?? null,
+            source_item_id: line.source_item_id ?? null,
+            source_product_line: line.source_product_line ?? null,
+            source_region: line.source_region ?? null,
+            source_currency: line.source_currency ?? null,
+            requested_resale_price: line.requested_resale_price ?? null,
+            requested_distributor_price: line.requested_distributor_price ?? null,
+            floor_price: band?.floor ?? null,
+            target_price: band?.target ?? null,
+            ceiling_price: band?.ceiling ?? null,
+            /* A JSON string, not an array: the driver turns a JavaScript array into a Postgres array. */
+            pricing_rationale: band ? JSON.stringify(band.rationale) : null,
+            priced_at: band ? pricedAt : null,
+          };
+        });
 
         const { error: linesError } = await db.from('quote_lines').insert(linesToInsert);
         if (linesError) throw linesError;
@@ -662,6 +733,9 @@ export function QuoteBuilder() {
       alert(outcome);
       setQuoteLines([]);
       setServiceLines([]);
+      /* The pricing and the upload report describe lines that no longer exist. */
+      setPricedLines({});
+      setUploadReport(null);
       setSelectedCustomer('');
       setSelectedPriceList('');
     } catch (error) {
@@ -830,7 +904,12 @@ export function QuoteBuilder() {
           </div>
 
           {uploadReport && (() => {
-            const rowsWithErrors = uploadReport.form.lines.filter((l) => l.errors.length > 0);
+            const rowsWithErrors = uploadReport.form.lines.filter(
+              (l) => l.errors.length > 0 && !l.withdrawn
+            );
+            const quoteCurrencyCode = currencies.find((c) => c.id === selectedCurrency)?.code ?? null;
+            const itemIdCount = quoteLines.filter((l) => l.source_item_id).length;
+            const readColumns = Object.entries(uploadReport.form.matchedHeaders);
             const fatal = uploadReport.form.fatal.length > 0;
             return (
               <div
@@ -864,6 +943,81 @@ export function QuoteBuilder() {
                       )}
                     </div>
 
+                    {uploadReport.withdrawn.length > 0 && (
+                      <div className="flex gap-1 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          {uploadReport.withdrawn.length} line
+                          {uploadReport.withdrawn.length === 1 ? ' was' : 's were'} left out because
+                          Channel Partners has deleted, deactivated or rejected{' '}
+                          {uploadReport.withdrawn.length === 1 ? 'it' : 'them'} (
+                          {uploadReport.withdrawn
+                            .slice(0, 4)
+                            .map((w) => `row ${w.rowNumber}${w.partNumber ? ' ' + w.partNumber : ''}`)
+                            .join(', ')}
+                          {uploadReport.withdrawn.length > 4 ? ', …' : ''}).
+                        </span>
+                      </div>
+                    )}
+
+                    {uploadReport.ambiguousParts.length > 0 && (
+                      <div className="flex gap-1 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          {uploadReport.ambiguousParts.length} part number
+                          {uploadReport.ambiguousParts.length === 1 ? ' matches' : 's match'} more
+                          than one catalogue product ({uploadReport.ambiguousParts.join(', ')}), so
+                          {uploadReport.ambiguousParts.length === 1 ? ' it was' : ' they were'} not
+                          matched to either. Choose the product on the line.
+                        </span>
+                      </div>
+                    )}
+
+                    {uploadReport.form.currency && (
+                      <div className="text-xs text-gray-600">
+                        Amounts in this file are in{' '}
+                        <span className="font-medium">{uploadReport.form.currency}</span>.
+                        {quoteCurrencyCode && quoteCurrencyCode !== uploadReport.form.currency && (
+                          <span className="ml-1 inline-flex items-center gap-1 text-amber-800">
+                            <AlertTriangle size={12} />
+                            The quote currency is {quoteCurrencyCode} and nothing here is converted,
+                            so the figures below are {uploadReport.form.currency} whatever symbol is
+                            shown.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {uploadReport.form.mixedCurrencies.length > 0 && (
+                      <div className="flex gap-1 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          This file mixes currencies ({uploadReport.form.mixedCurrencies.join(', ')}).
+                          Costs and prices are not converted, so margins across those lines are not
+                          comparable.
+                        </span>
+                      </div>
+                    )}
+
+                    {uploadReport.form.linesWithOutcome > 0 && (
+                      <div className="flex gap-1 text-xs text-amber-800">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          {uploadReport.form.linesWithOutcome} line
+                          {uploadReport.form.linesWithOutcome === 1 ? ' already has' : 's already have'}{' '}
+                          an outcome in Channel Partners, so this looks like past business and not a
+                          new request. It is priced either way.
+                        </span>
+                      </div>
+                    )}
+
+                    {itemIdCount > 0 && (
+                      <div className="text-xs text-gray-600">
+                        Channel Partners item ID kept on {itemIdCount} of {quoteLines.length} line
+                        {quoteLines.length === 1 ? '' : 's'}, so results can be matched back.
+                      </div>
+                    )}
+
                     {uploadReport.inactiveParts.length > 0 && (
                       <div className="flex gap-1 text-xs text-amber-800">
                         <AlertTriangle size={13} className="mt-0.5 shrink-0" />
@@ -895,10 +1049,26 @@ export function QuoteBuilder() {
                       </div>
                     )}
 
-                    {uploadReport.form.unmappedHeaders.length > 0 && (
-                      <div className="text-xs text-gray-500">
-                        Columns not used: {uploadReport.form.unmappedHeaders.join(', ')}
-                      </div>
+                    {readColumns.length > 0 && (
+                      <details className="text-xs text-gray-500">
+                        <summary className="cursor-pointer">
+                          {readColumns.length} columns read
+                          {uploadReport.form.unmappedHeaders.length > 0 &&
+                            `, ${uploadReport.form.unmappedHeaders.length} not used`}
+                        </summary>
+                        <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5">
+                          {readColumns.map(([field, header]) => (
+                            <div key={field}>
+                              <span className="text-gray-700">{field}</span> from {header}
+                            </div>
+                          ))}
+                        </div>
+                        {uploadReport.form.unmappedHeaders.length > 0 && (
+                          <div className="mt-2 break-words">
+                            Not used: {uploadReport.form.unmappedHeaders.join(', ')}
+                          </div>
+                        )}
+                      </details>
                     )}
 
                     {rowsWithErrors.length > 0 && (
@@ -1100,6 +1270,9 @@ export function QuoteBuilder() {
                       priced={pricedLines[index]}
                       unitPrice={line.unit_price}
                       discountPercent={line.discount_applied}
+                      requestedResale={line.requested_resale_price}
+                      requestedDistributor={line.requested_distributor_price}
+                      currency={line.source_currency}
                       format={money}
                       onApplyTarget={(price) => {
                         updateLine(index, 'unit_price', toCents(price));
@@ -1119,12 +1292,37 @@ export function QuoteBuilder() {
                     />
                   </td>
                   <td className="px-4 py-3">
-                    {line.product_id && (() => {
-                      const product = products.find(p => p.id === line.product_id);
-                      if (product && line.unit_price) {
+                    {(() => {
+                      /*
+                       * The margin uses the same cost the pricing used. It used to read the
+                       * catalogue's cost, so a line priced from the cost on an uploaded file
+                       * showed one margin in the guidance and a different one here. Where the
+                       * line has not been priced yet it falls back to the catalogue cost, as
+                       * before. A configured part has no catalogue cost, so it relies on the
+                       * cost from the file and shows nothing without one.
+                       */
+                      const catalogueCost = products.find((p) => p.id === line.product_id)?.base_cost;
+                      const cost = pricedLines[index]?.costUsed ?? catalogueCost ?? null;
+                      if (cost && line.unit_price) {
                         const effectivePrice = (line.unit_price || 0) * (1 - (line.discount_applied || 0) / 100);
-                        const margin = ((effectivePrice - product.base_cost) / effectivePrice) * 100;
-                        const marginColor = margin < 20 ? 'text-red-600' : margin < 30 ? 'text-amber-600' : 'text-emerald-600';
+                        const margin = ((effectivePrice - cost) / effectivePrice) * 100;
+                        /* Colour follows the approval line when there is one, so the figure and the flag agree. */
+                        const approval = assessEscalation({
+                          unitPrice: line.unit_price,
+                          discountPercent: line.discount_applied,
+                          cost,
+                          minimumMargin: pricedLines[index]?.authority.minimumMargin,
+                        });
+                        const marginColor =
+                          approval.status === 'needs-approval'
+                            ? 'text-red-600'
+                            : approval.status === 'within-authority'
+                              ? 'text-emerald-600'
+                              : margin < 20
+                                ? 'text-red-600'
+                                : margin < 30
+                                  ? 'text-amber-600'
+                                  : 'text-emerald-600';
                         return <span className={`font-semibold ${marginColor}`}>{margin.toFixed(1)}%</span>;
                       }
                       return <span className="text-gray-400">-</span>;

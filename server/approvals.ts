@@ -72,7 +72,11 @@ export async function quoteFinancials(
               ql.unit_price * (1 - COALESCE(ql.discount_applied, 0) / 100)
                                                               AS effective
          FROM quote_lines ql
-         JOIN products p ON p.id = ql.product_id
+         /* LEFT, because a configured part has no catalogue product. An inner join
+            dropped those lines from the margin and from the line counts, so a quote
+            made only of them read as having no lines at all. Their cost comes from
+            booked_cost, which COALESCE above already prefers. */
+         LEFT JOIN products p ON p.id = ql.product_id
         WHERE ql.quote_id = $1
      )
      SELECT (SELECT total FROM quotes WHERE id = $1)          AS total,

@@ -44,31 +44,111 @@ export const referenceRouter = router({
    * part numbers arrive from a spreadsheet.
    */
   resolveParts: protectedProcedure
-    .input(z.object({ partNumbers: z.array(z.string().min(1).max(200)).min(1).max(500) }))
+    .input(
+      z.object({
+        parts: z
+          .array(
+            z.object({
+              /** The catalogue number: PART_NO in the Channel Partners export. */
+              partNumber: z.string().min(1).max(200),
+              /** The internal number: PART_NO_MANUF. A second way to find the same part. */
+              altPartNumber: z.string().max(200).nullable().default(null),
+            })
+          )
+          .min(1)
+          .max(500),
+      })
+    )
     .query(({ ctx, input }) =>
       ctx.withDb(async (db) => {
+        /*
+         * Candidates come back ranked by how strong the match is:
+         *   1  the number is the product's own id
+         *   2  the number, normalised, is one of the product's recorded part numbers
+         *   3  the alternate number, normalised, is one of them
+         * Normalising is uppercase with everything but letters and digits removed,
+         * the same reduction product_part_numbers.normalised was built with, so
+         * CIR-070 and cir070 find the same part.
+         */
         const { rows } = await db.query<{
-          part_number: string;
+          ord: number;
+          rank: number;
           id: string;
           name: string;
           status: string | null;
           category: string | null;
           base_cost: string | null;
         }>(
-          `SELECT lower(btrim(q.part_number)) AS part_number,
-                  p.id, p.name, p.status, p.category, p.base_cost
-             FROM unnest($1::text[]) AS q(part_number)
-             JOIN products p ON lower(p.id) = lower(btrim(q.part_number))`,
-          [input.partNumbers]
+          `WITH q AS (
+             SELECT t.ord::int AS ord,
+                    lower(btrim(t.pn)) AS key,
+                    NULLIF(upper(regexp_replace(t.pn, '[^A-Za-z0-9]', '', 'g')), '') AS norm,
+                    NULLIF(upper(regexp_replace(coalesce(t.alt, ''), '[^A-Za-z0-9]', '', 'g')), '') AS alt_norm
+               FROM unnest($1::text[], $2::text[]) WITH ORDINALITY AS t(pn, alt, ord)
+           )
+           SELECT q.ord, 1 AS rank, p.id, p.name, p.status, p.category, p.base_cost
+             FROM q JOIN products p ON lower(p.id) = q.key
+           UNION ALL
+           SELECT q.ord, 2, p.id, p.name, p.status, p.category, p.base_cost
+             FROM q
+             JOIN product_part_numbers n ON n.normalised = q.norm
+             JOIN products p ON p.id = n.product_id
+           UNION ALL
+           SELECT q.ord, 3, p.id, p.name, p.status, p.category, p.base_cost
+             FROM q
+             JOIN product_part_numbers n ON n.normalised = q.alt_norm
+             JOIN products p ON p.id = n.product_id`,
+          [input.parts.map((p) => p.partNumber), input.parts.map((p) => p.altPartNumber)]
         );
-        return rows.map((r) => ({
-          partNumber: r.part_number,
-          productId: r.id,
-          name: r.name,
-          status: r.status,
-          category: r.category,
-          baseCost: r.base_cost === null ? null : Number(r.base_cost),
-        }));
+
+        /*
+         * The strongest rank that found anything decides. If it found more than
+         * one distinct product the number is ambiguous, and no product is
+         * returned: picking one would price the line from the wrong part's cost
+         * and history without any sign that it had.
+         */
+        type Match = {
+          index: number;
+          productId: string;
+          name: string;
+          status: string | null;
+          category: string | null;
+          baseCost: number | null;
+          matchedBy: 'id' | 'part number' | 'alternate part number';
+        };
+        const matches: Match[] = [];
+        const ambiguous: Array<{ index: number; productIds: string[] }> = [];
+
+        const byLine = new Map<number, typeof rows>();
+        for (const r of rows) {
+          const list = byLine.get(r.ord) ?? [];
+          list.push(r);
+          byLine.set(r.ord, list);
+        }
+
+        for (const [ord, candidates] of byLine) {
+          const best = Math.min(...candidates.map((c) => c.rank));
+          const atBest = candidates.filter((c) => c.rank === best);
+          const distinct = [...new Map(atBest.map((c) => [c.id, c])).values()];
+          const index = ord - 1;
+
+          if (distinct.length > 1) {
+            ambiguous.push({ index, productIds: distinct.map((d) => d.id).sort() });
+            continue;
+          }
+          const hit = distinct[0];
+          matches.push({
+            index,
+            productId: hit.id,
+            name: hit.name,
+            status: hit.status,
+            category: hit.category,
+            baseCost: hit.base_cost === null ? null : Number(hit.base_cost),
+            matchedBy: best === 1 ? 'id' : best === 2 ? 'part number' : 'alternate part number',
+          });
+        }
+
+        return { matches, ambiguous };
       })
     ),
 
